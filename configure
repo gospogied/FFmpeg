@@ -297,6 +297,7 @@ External library support:
   --enable-cuda-sdk        enable CUDA features that require the CUDA SDK [no]
   --disable-cuvid          disable Nvidia CUVID support [autodetect]
   --disable-d3d11va        disable Microsoft Direct3D 11 video acceleration code [autodetect]
+  --enable-drm             enable DRM code (Linux) [no]
   --disable-dxva2          disable Microsoft DirectX 9 video acceleration code [autodetect]
   --enable-libmfx          enable Intel MediaSDK (AKA Quick Sync Video) code via libmfx [no]
   --enable-libnpp          enable Nvidia Performance Primitives-based code [no]
@@ -1530,6 +1531,7 @@ EXTERNAL_LIBRARY_LIST="
     $EXTERNAL_LIBRARY_GPLV3_LIST
     chromaprint
     crystalhd
+    drm
     gcrypt
     gnutls
     jni
@@ -5794,6 +5796,7 @@ enabled coreimage_filter  && { check_header_objcc QuartzCore/CoreImage.h || disa
 enabled coreimagesrc_filter && { check_header_objcc QuartzCore/CoreImage.h || disable coreimagesrc_filter; }
 enabled decklink          && { { check_header DeckLinkAPI.h || die "ERROR: DeckLinkAPI.h header not found"; } &&
                                { check_cpp_condition DeckLinkAPIVersion.h "BLACKMAGIC_DECKLINK_API_VERSION >= 0x0a060100" || die "ERROR: Decklink API version must be >= 10.6.1."; } }
+enabled drm               && require_pkg_config libdrm xf86drm.h drmOpen
 enabled frei0r            && { check_header frei0r.h || die "ERROR: frei0r.h header not found"; }
 enabled gmp               && require gmp gmp.h mpz_export -lgmp
 enabled gnutls            && require_pkg_config gnutls gnutls/gnutls.h gnutls_global_init

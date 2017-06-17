@@ -32,6 +32,9 @@ static const HWContextType *const hw_table[] = {
 #if CONFIG_CUDA
     &ff_hwcontext_type_cuda,
 #endif
+#if CONFIG_DRM
+    &ff_hwcontext_type_drm,
+#endif
 #if CONFIG_DXVA2
     &ff_hwcontext_type_dxva2,
 #endif
@@ -52,6 +55,7 @@ static const HWContextType *const hw_table[] = {
 
 static const char *const hw_type_names[] = {
     [AV_HWDEVICE_TYPE_CUDA]   = "cuda",
+    [AV_HWDEVICE_TYPE_DRM]    = "drm",
     [AV_HWDEVICE_TYPE_DXVA2]  = "dxva2",
     [AV_HWDEVICE_TYPE_QSV]    = "qsv",
     [AV_HWDEVICE_TYPE_VAAPI]  = "vaapi",
