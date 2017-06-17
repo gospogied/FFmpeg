@@ -28,11 +28,11 @@
 
 #include "avcodec.h"
 #include "decode.h"
-#include "drmprime.h"
 #include "internal.h"
 #include "libavutil/buffer.h"
 #include "libavutil/common.h"
 #include "libavutil/frame.h"
+#include "libavutil/hwcontext_drm.h"
 #include "libavutil/imgutils.h"
 #include "libavutil/log.h"
 
@@ -281,7 +281,7 @@ static int ffrkmpp_send_packet(AVCodecContext *avctx, const AVPacket *avpkt)
 
 static void ffrkmpp_release_frame(void *opaque, uint8_t *data)
 {
-    av_drmprime *primedata = (av_drmprime *)data;
+    AVDRMFrameDescriptor *desc = (AVDRMFrameDescriptor *)data;
     AVBufferRef *framecontextref = (AVBufferRef *)opaque;
     RKMPPFrameContext *framecontext = (RKMPPFrameContext *)framecontextref->data;
 
@@ -289,7 +289,7 @@ static void ffrkmpp_release_frame(void *opaque, uint8_t *data)
     av_buffer_unref(&framecontext->decoder_ref);
     av_buffer_unref(&framecontextref);
 
-    av_free(primedata);
+    av_free(desc);
 }
 
 static int ffrkmpp_retrieve_frame(AVCodecContext *avctx, AVFrame *frame)
@@ -301,7 +301,7 @@ static int ffrkmpp_retrieve_frame(AVCodecContext *avctx, AVFrame *frame)
     MPP_RET ret = MPP_NOK;
     MppFrame mppframe = NULL;
     MppBuffer buffer = NULL;
-    av_drmprime *primedata = NULL;
+    AVDRMFrameDescriptor *desc = NULL;
     int retrycount = 0;
 
     // on start of decoding, MPP can return -1, which is supposed to be expected
@@ -354,7 +354,7 @@ retry_get_frame:
         av_log(avctx, AV_LOG_DEBUG, "Received a frame.\n");
 
         // setup general frame fields
-        frame->format   = AV_PIX_FMT_DRMPRIME;
+        frame->format   = AV_PIX_FMT_DRM;
         frame->width    = mpp_frame_get_width(mppframe);
         frame->height   = mpp_frame_get_height(mppframe);
         frame->pts      = mpp_frame_get_pts(mppframe);
@@ -362,19 +362,19 @@ retry_get_frame:
         // now setup the frame buffer info
         buffer = mpp_frame_get_buffer(mppframe);
         if (buffer) {
-            primedata = av_mallocz(sizeof(av_drmprime));
-            if (!primedata) {
+            desc = av_mallocz(sizeof(AVDRMFrameDescriptor));
+            if (!desc) {
                 ret = AVERROR(ENOMEM);
                 goto fail;
             }
 
-            primedata->strides[0]   = mpp_frame_get_hor_stride(mppframe);
-            primedata->strides[1]   = primedata->strides[0];
-            primedata->offsets[0]   = 0;
-            primedata->offsets[1]   = primedata->strides[0] * mpp_frame_get_ver_stride(mppframe);
-            primedata->fds[0]       = mpp_buffer_get_fd(buffer);
-            primedata->fds[1]       = primedata->fds[0];
-            primedata->format       = ffrkmpp_get_frameformat(mpp_frame_get_fmt(mppframe));
+            desc->pitch[0]   = mpp_frame_get_hor_stride(mppframe);
+            desc->pitch[1]   = desc->pitch[0];
+            desc->offset[0]  = 0;
+            desc->offset[1]  = desc->pitch[0] * mpp_frame_get_ver_stride(mppframe);
+            desc->fd[0]      = mpp_buffer_get_fd(buffer);
+            desc->fd[1]      = desc->fd[0];
+            desc->format     = ffrkmpp_get_frameformat(mpp_frame_get_fmt(mppframe));
 
             // we also allocate a struct in buf[0] that will allow to hold additionnal information
             // for releasing properly MPP frames and decoder
@@ -389,8 +389,8 @@ retry_get_frame:
             framecontext->decoder_ref = av_buffer_ref(rk_context->decoder_ref);
             framecontext->frame = mppframe;
 
-            frame->data[3]  = (uint8_t *)primedata;
-            frame->buf[0]   = av_buffer_create((uint8_t *)primedata, sizeof(*primedata), ffrkmpp_release_frame,
+            frame->data[3]  = (uint8_t *)desc;
+            frame->buf[0]   = av_buffer_create((uint8_t *)desc, sizeof(*desc), ffrkmpp_release_frame,
                                                framecontextref, AV_BUFFER_FLAG_READONLY);
 
             if (!frame->buf[0]) {
@@ -422,8 +422,8 @@ fail:
     if (framecontextref)
         av_buffer_unref(&framecontextref);
 
-    if (primedata)
-        av_free(primedata);
+    if (desc)
+        av_free(desc);
 
     return ret;
 }
@@ -488,7 +488,7 @@ static void ffrkmpp_flush(AVCodecContext *avctx)
       .name     = #NAME "_rkmpp", \
       .type     = AVMEDIA_TYPE_VIDEO,\
       .id       = ID, \
-      .pix_fmt  = AV_PIX_FMT_DRMPRIME,\
+      .pix_fmt  = AV_PIX_FMT_DRM,\
   };
 
 #define FFRKMPP_DEC_CLASS(NAME) \
@@ -513,7 +513,7 @@ static void ffrkmpp_flush(AVCodecContext *avctx)
         .priv_class     = &ffrkmpp_##NAME##_dec_class, \
         .capabilities   = AV_CODEC_CAP_DELAY, \
         .caps_internal  = FF_CODEC_CAP_SETS_PKT_DTS, \
-        .pix_fmts       = (const enum AVPixelFormat[]) { AV_PIX_FMT_DRMPRIME, \
+        .pix_fmts       = (const enum AVPixelFormat[]) { AV_PIX_FMT_DRM, \
                                                          AV_PIX_FMT_NONE}, \
         .bsfs           = #BSFS, \
     };

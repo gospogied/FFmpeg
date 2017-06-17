@@ -6,7 +6,6 @@ HEADERS = avcodec.h                                                     \
           avfft.h                                                       \
           d3d11va.h                                                     \
           dirac.h                                                       \
-          drmprime.h                                                    \
           dv_profile.h                                                  \
           dxva2.h                                                       \
           jni.h                                                         \
@@ -19,7 +18,6 @@ HEADERS = avcodec.h                                                     \
           videotoolbox.h                                                \
           vorbis_parser.h                                               \
           xvmc.h                                                        \
-
 
 OBJS = allcodecs.o                                                      \
        audioconvert.o                                                   \

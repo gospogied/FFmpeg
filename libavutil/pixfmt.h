@@ -248,11 +248,6 @@ enum AVPixelFormat {
      */
     AV_PIX_FMT_CUDA,
 
-    /**
-     *  HW acceleration allowing to get drmprime information, data[3] contains a av_drmprime pointer
-     */
-    AV_PIX_FMT_DRMPRIME,
-
     AV_PIX_FMT_0RGB=0x123+4,///< packed RGB 8:8:8, 32bpp, XRGBXRGB...   X=unused/undefined
     AV_PIX_FMT_RGB0,        ///< packed RGB 8:8:8, 32bpp, RGBXRGBX...   X=unused/undefined
     AV_PIX_FMT_0BGR,        ///< packed BGR 8:8:8, 32bpp, XBGRXBGR...   X=unused/undefined
