@@ -41,6 +41,9 @@ static const HWContextType *const hw_table[] = {
 #if CONFIG_DXVA2
     &ff_hwcontext_type_dxva2,
 #endif
+#if CONFIG_LIBDRM
+    &ff_hwcontext_type_drm,
+#endif
 #if CONFIG_QSV
     &ff_hwcontext_type_qsv,
 #endif

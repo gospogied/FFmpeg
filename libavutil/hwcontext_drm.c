@@ -16,9 +16,13 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "config.h"
+
 #include <fcntl.h>
 #include <sys/mman.h>
-#include <unistd.h>
+#if HAVE_UNISTD_H
+#   include <unistd.h>
+#endif
 
 #include <drm.h>
 #include <xf86drm.h>
@@ -45,11 +49,11 @@ static int drm_device_create(AVHWDeviceContext *hwdev, const char *device,
 
     hwctx->fd = open(device, O_RDWR);
     if (hwctx->fd < 0)
-        return AVERROR(errno);
+        return AVERROR_UNKNOWN;
 
     version = drmGetVersion(hwctx->fd);
     if (!version) {
-        av_log(hwdev, AV_LOG_ERROR, "Failed to get version information "
+        av_log(hwdev, AV_LOG_ERROR, "Failed to DRM version information "
                "from %s: probably not a DRM device?\n", device);
         close(hwctx->fd);
         return AVERROR(EINVAL);
@@ -95,8 +99,10 @@ static void drm_unmap_frame(AVHWFramesContext *hwfc,
     DRMMapping *map = hwmap->priv;
     int i;
 
-    for (i = 0; i < map->nb_regions; i++)
-        munmap(map->address[i], map->length[i]);
+    for (i = 0; i < map->nb_regions; i++) {
+        if (map->address[i])
+            munmap(map->address[i], map->length[i]);
+    }
 
     av_free(map);
 }
@@ -155,7 +161,7 @@ static int drm_map_frame(AVHWFramesContext *hwfc,
     err = ff_hwframe_map_create(src->hw_frames_ctx, dst, src,
                                 &drm_unmap_frame, map);
     if (err < 0)
-        goto fail;
+        return err;
 
     return 0;
 
@@ -230,8 +236,7 @@ static int drm_transfer_data_to(AVHWFramesContext *hwfc,
         return AVERROR(ENOMEM);
     map->format = src->format;
 
-    err = drm_map_frame(hwfc, map, dst, AV_HWFRAME_MAP_WRITE |
-                                        AV_HWFRAME_MAP_OVERWRITE);
+    err = drm_map_frame(hwfc, map, dst, AV_HWFRAME_MAP_WRITE | AV_HWFRAME_MAP_OVERWRITE);
     if (err)
         goto fail;
 
