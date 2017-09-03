@@ -270,7 +270,7 @@ static int rkmpp_send_packet(AVCodecContext *avctx, const AVPacket *avpkt)
 
     // now send packet
     ret = rkmpp_write_data(avctx, avpkt->data, avpkt->size, avpkt->pts);
-    if (ret)
+    if (ret && ret != AVERROR(EAGAIN))
         av_log(avctx, AV_LOG_ERROR, "Failed to write data to decoder (code = %d)\n", ret);
 
     return ret;
@@ -309,7 +309,7 @@ static int rkmpp_retrieve_frame(AVCodecContext *avctx, AVFrame *frame)
     // in order to let it time to complete it's init, then we sleep a bit between retries.
 retry_get_frame:
     ret = decoder->mpi->decode_get_frame(decoder->ctx, &mppframe);
-    if (ret != MPP_OK && ret != MPP_ERR_TIMEOUT) {
+    if (ret != MPP_OK && ret != MPP_ERR_TIMEOUT && !decoder->first_frame) {
         if (retrycount < 5) {
             av_log(avctx, AV_LOG_DEBUG, "Failed to get a frame, retrying (code = %d, retrycount = %d)\n", ret, retrycount);
             usleep(10000);
@@ -347,7 +347,7 @@ retry_get_frame:
             ret = AVERROR(EAGAIN);
             goto fail;
         } else if (mpp_frame_get_errinfo(mppframe)) {
-            av_log(avctx, AV_LOG_DEBUG, "Received a errinfo frame.\n");
+            av_log(avctx, AV_LOG_ERROR, "Received a errinfo frame.\n");
             ret = AVERROR_EXIT;
             goto fail;
         }
@@ -494,13 +494,13 @@ static void rkmpp_flush(AVCodecContext *avctx)
         av_log(avctx, AV_LOG_ERROR, "Failed to reset MPI (code = %d)\n", ret);
 }
 
-#define RKMPP_DEC_HWACCEL(NAME, ID) \
-  AVHWAccel ff_##NAME##_rkmpp_hwaccel = { \
-      .name     = #NAME "_rkmpp", \
-      .type     = AVMEDIA_TYPE_VIDEO,\
-      .id       = ID, \
-      .pix_fmt  = AV_PIX_FMT_DRM_PRIME,\
-  };
+//#define RKMPP_DEC_HWACCEL(NAME, ID) \
+//  AVHWAccel ff_##NAME##_rkmpp_hwaccel = { \
+//      .name     = #NAME "_rkmpp", \
+//      .type     = AVMEDIA_TYPE_VIDEO,\
+//      .id       = ID, \
+//      .pix_fmt  = AV_PIX_FMT_DRM_PRIME,\
+//  };
 
 #define RKMPP_DEC_CLASS(NAME) \
     static const AVClass rkmpp_##NAME##_dec_class = { \
@@ -510,7 +510,7 @@ static void rkmpp_flush(AVCodecContext *avctx)
 
 #define RKMPP_DEC(NAME, ID, BSFS) \
     RKMPP_DEC_CLASS(NAME) \
-    RKMPP_DEC_HWACCEL(NAME, ID) \
+/*    RKMPP_DEC_HWACCEL(NAME, ID)*/ \
     AVCodec ff_##NAME##_rkmpp_decoder = { \
         .name           = #NAME "_rkmpp", \
         .long_name      = NULL_IF_CONFIG_SMALL(#NAME " (rkmpp)"), \
