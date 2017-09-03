@@ -35,6 +35,7 @@ version <next>:
 - pseudocolor video filter
 - raw G.726 muxer and demuxer, left- and right-justified
 - NewTek NDI input/output device
+- Addition of Rockchip MPP hardware decoding
 
 version 3.3:
 - CrystalHD decoder moved to new decode API
@@ -70,7 +71,6 @@ version 3.3:
 - Removed asyncts filter (use af_aresample instead)
 - Intel QSV-accelerated VP8 video decoding
 - VAAPI-accelerated deinterlacing
-- Addition of Rockchip MPP harware decoding
 
 
 version 3.2:

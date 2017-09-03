@@ -19,7 +19,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include <drm/drm_fourcc.h>
+#include <drm_fourcc.h>
 #include <pthread.h>
 #include <rockchip/mpp_buffer.h>
 #include <rockchip/rk_mpi.h>
@@ -147,10 +147,7 @@ static int ffrkmpp_init_decoder(AVCodecContext *avctx)
     RK_S64 paramS64;
     RK_S32 paramS32;
 
-    if ((ret = ff_get_format(avctx, avctx->codec->pix_fmts)) < 0)
-        return ret;
-
-    avctx->pix_fmt = ret;
+    avctx->pix_fmt = AV_PIX_FMT_DRM_PRIME;
 
     // create a decoder and a ref to it
     decoder = av_mallocz(sizeof(RKMPPDecoder));
