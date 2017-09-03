@@ -529,9 +529,9 @@ static void ffrkmpp_flush(AVCodecContext *avctx)
         .caps_internal  = FF_CODEC_CAP_SETS_PKT_DTS, \
         .pix_fmts       = (const enum AVPixelFormat[]) { AV_PIX_FMT_DRM_PRIME, \
                                                          AV_PIX_FMT_NONE}, \
-        .bsfs           = #BSFS, \
+        .bsfs           = BSFS, \
     };
 
-FFRKMPP_DEC(h264, AV_CODEC_ID_H264, h264_mp4toannexb)
-FFRKMPP_DEC(hevc, AV_CODEC_ID_HEVC, hevc_mp4toannexb)
-FFRKMPP_DEC(vp8,  AV_CODEC_ID_VP8,  )
+FFRKMPP_DEC(h264, AV_CODEC_ID_H264, "h264_mp4toannexb")
+FFRKMPP_DEC(hevc, AV_CODEC_ID_HEVC, "hevc_mp4toannexb")
+FFRKMPP_DEC(vp8,  AV_CODEC_ID_VP8,  NULL)
