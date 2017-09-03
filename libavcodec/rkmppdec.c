@@ -59,7 +59,7 @@ typedef struct {
     AVBufferRef *decoder_ref;
 } RKMPPFrameContext;
 
-static MppCodingType ffrkmpp_get_codingtype(AVCodecContext *avctx)
+static MppCodingType rkmpp_get_codingtype(AVCodecContext *avctx)
 {
     switch (avctx->codec_id) {
     case AV_CODEC_ID_H264:  return MPP_VIDEO_CodingAVC;
@@ -69,7 +69,7 @@ static MppCodingType ffrkmpp_get_codingtype(AVCodecContext *avctx)
     }
 }
 
-static int ffrkmpp_get_frameformat(MppFrameFormat mppformat)
+static int rkmpp_get_frameformat(MppFrameFormat mppformat)
 {
     switch (mppformat) {
     case MPP_FMT_YUV420SP:          return DRM_FORMAT_NV12;
@@ -80,11 +80,11 @@ static int ffrkmpp_get_frameformat(MppFrameFormat mppformat)
     }
 }
 
-static int ffrkmpp_write_data(AVCodecContext *avctx, uint8_t *buffer, int size, int64_t pts)
+static int rkmpp_write_data(AVCodecContext *avctx, uint8_t *buffer, int size, int64_t pts)
 {
     RKMPPDecodeContext *rk_context = avctx->priv_data;
     RKMPPDecoder *decoder = (RKMPPDecoder *)rk_context->decoder_ref->data;
-    MPP_RET ret = MPP_NOK;
+    int ret = MPP_NOK;
     MppPacket packet;
 
     // create the MPP packet
@@ -115,14 +115,14 @@ static int ffrkmpp_write_data(AVCodecContext *avctx, uint8_t *buffer, int size, 
     return ret;
 }
 
-static int ffrkmpp_close_decoder(AVCodecContext *avctx)
+static int rkmpp_close_decoder(AVCodecContext *avctx)
 {
     RKMPPDecodeContext *rk_context = avctx->priv_data;
     av_buffer_unref(&rk_context->decoder_ref);
     return 0;
 }
 
-static void ffrkmpp_release_decoder(void *opaque, uint8_t *data)
+static void rkmpp_release_decoder(void *opaque, uint8_t *data)
 {
     RKMPPDecoder *decoder = (RKMPPDecoder *)data;
 
@@ -138,12 +138,12 @@ static void ffrkmpp_release_decoder(void *opaque, uint8_t *data)
     av_free(decoder);
 }
 
-static int ffrkmpp_init_decoder(AVCodecContext *avctx)
+static int rkmpp_init_decoder(AVCodecContext *avctx)
 {
     RKMPPDecodeContext *rk_context = avctx->priv_data;
     RKMPPDecoder *decoder = NULL;
     MppCodingType codectype = MPP_VIDEO_CodingUnused;
-    MPP_RET ret = MPP_NOK;
+    int ret = MPP_NOK;
     RK_S64 paramS64;
     RK_S32 paramS32;
 
@@ -156,7 +156,7 @@ static int ffrkmpp_init_decoder(AVCodecContext *avctx)
         goto fail;
     }
 
-    rk_context->decoder_ref = av_buffer_create((uint8_t *)decoder, sizeof(*decoder), ffrkmpp_release_decoder,
+    rk_context->decoder_ref = av_buffer_create((uint8_t *)decoder, sizeof(*decoder), rkmpp_release_decoder,
                                                NULL, AV_BUFFER_FLAG_READONLY);
     if (!rk_context->decoder_ref) {
         av_free(decoder);
@@ -166,7 +166,7 @@ static int ffrkmpp_init_decoder(AVCodecContext *avctx)
 
     av_log(avctx, AV_LOG_DEBUG, "Initializing RKMPP decoder.\n");
 
-    codectype = ffrkmpp_get_codingtype(avctx);
+    codectype = rkmpp_get_codingtype(avctx);
     if (codectype == MPP_VIDEO_CodingUnused) {
         av_log(avctx, AV_LOG_ERROR, "Unknown codec type (%d).\n", avctx->codec_id);
         ret = AVERROR_UNKNOWN;
@@ -234,21 +234,21 @@ static int ffrkmpp_init_decoder(AVCodecContext *avctx)
 
 fail:
     av_log(avctx, AV_LOG_ERROR, "Failed to initialize RKMPP decoder.\n");
-    ffrkmpp_close_decoder(avctx);
+    rkmpp_close_decoder(avctx);
     return ret;
 }
 
-static int ffrkmpp_send_packet(AVCodecContext *avctx, const AVPacket *avpkt)
+static int rkmpp_send_packet(AVCodecContext *avctx, const AVPacket *avpkt)
 {
     RKMPPDecodeContext *rk_context = avctx->priv_data;
     RKMPPDecoder *decoder = (RKMPPDecoder *)rk_context->decoder_ref->data;
-    MPP_RET ret = MPP_NOK;
+    int ret = MPP_NOK;
 
     // handle EOF
     if (!avpkt->size) {
         av_log(avctx, AV_LOG_DEBUG, "End of stream.\n");
         decoder->eos_reached = 1;
-        ret = ffrkmpp_write_data(avctx, NULL, 0, 0);
+        ret = rkmpp_write_data(avctx, NULL, 0, 0);
         if (ret)
             av_log(avctx, AV_LOG_ERROR, "Failed to send EOS to decoder (code = %d)\n", ret);
         return ret;
@@ -257,7 +257,7 @@ static int ffrkmpp_send_packet(AVCodecContext *avctx, const AVPacket *avpkt)
     // on first packet, send extradata
     if (decoder->first_packet) {
         if (avctx->extradata_size) {
-            ret = ffrkmpp_write_data(avctx, avctx->extradata,
+            ret = rkmpp_write_data(avctx, avctx->extradata,
                                             avctx->extradata_size,
                                             avpkt->pts);
             if (ret) {
@@ -269,14 +269,14 @@ static int ffrkmpp_send_packet(AVCodecContext *avctx, const AVPacket *avpkt)
     }
 
     // now send packet
-    ret = ffrkmpp_write_data(avctx, avpkt->data, avpkt->size, avpkt->pts);
+    ret = rkmpp_write_data(avctx, avpkt->data, avpkt->size, avpkt->pts);
     if (ret)
         av_log(avctx, AV_LOG_ERROR, "Failed to write data to decoder (code = %d)\n", ret);
 
     return ret;
 }
 
-static void ffrkmpp_release_frame(void *opaque, uint8_t *data)
+static void rkmpp_release_frame(void *opaque, uint8_t *data)
 {
     AVDRMFrameDescriptor *desc = (AVDRMFrameDescriptor *)data;
     AVBufferRef *framecontextref = (AVBufferRef *)opaque;
@@ -289,13 +289,13 @@ static void ffrkmpp_release_frame(void *opaque, uint8_t *data)
     av_free(desc);
 }
 
-static int ffrkmpp_retrieve_frame(AVCodecContext *avctx, AVFrame *frame)
+static int rkmpp_retrieve_frame(AVCodecContext *avctx, AVFrame *frame)
 {
     RKMPPDecodeContext *rk_context = avctx->priv_data;
     RKMPPDecoder *decoder = (RKMPPDecoder *)rk_context->decoder_ref->data;
     RKMPPFrameContext *framecontext = NULL;
     AVBufferRef *framecontextref = NULL;
-    MPP_RET ret = MPP_NOK;
+    int ret = MPP_NOK;
     MppFrame mppframe = NULL;
     MppBuffer buffer = NULL;
     AVDRMFrameDescriptor *desc = NULL;
@@ -376,7 +376,7 @@ retry_get_frame:
 
             desc->nb_layers = 1;
             layer = &desc->layers[0];
-            layer->format = ffrkmpp_get_frameformat(mpp_frame_get_fmt(mppframe));
+            layer->format = rkmpp_get_frameformat(mpp_frame_get_fmt(mppframe));
             layer->nb_planes = 2;
 
             layer->planes[0].object_index = 0;
@@ -401,7 +401,7 @@ retry_get_frame:
             framecontext->frame = mppframe;
 
             frame->data[0]  = (uint8_t *)desc;
-            frame->buf[0]   = av_buffer_create((uint8_t *)desc, sizeof(*desc), ffrkmpp_release_frame,
+            frame->buf[0]   = av_buffer_create((uint8_t *)desc, sizeof(*desc), rkmpp_release_frame,
                                                framecontextref, AV_BUFFER_FLAG_READONLY);
 
             if (!frame->buf[0]) {
@@ -439,11 +439,11 @@ fail:
     return ret;
 }
 
-static int ffrkmpp_receive_frame(AVCodecContext *avctx, AVFrame *frame)
+static int rkmpp_receive_frame(AVCodecContext *avctx, AVFrame *frame)
 {
     RKMPPDecodeContext *rk_context = avctx->priv_data;
     RKMPPDecoder *decoder = (RKMPPDecoder *)rk_context->decoder_ref->data;
-    MPP_RET ret = MPP_NOK;
+    int ret = MPP_NOK;
     AVPacket pkt = {0};
     RK_S32 freeslots;
 
@@ -461,7 +461,7 @@ static int ffrkmpp_receive_frame(AVCodecContext *avctx, AVFrame *frame)
                 return ret;
             }
 
-            ret = ffrkmpp_send_packet(avctx, &pkt);
+            ret = rkmpp_send_packet(avctx, &pkt);
             av_packet_unref(&pkt);
 
             if (ret < 0) {
@@ -475,14 +475,14 @@ static int ffrkmpp_receive_frame(AVCodecContext *avctx, AVFrame *frame)
             return AVERROR(EAGAIN);
     }
 
-    return ffrkmpp_retrieve_frame(avctx, frame);
+    return rkmpp_retrieve_frame(avctx, frame);
 }
 
-static void ffrkmpp_flush(AVCodecContext *avctx)
+static void rkmpp_flush(AVCodecContext *avctx)
 {
     RKMPPDecodeContext *rk_context = avctx->priv_data;
     RKMPPDecoder *decoder = (RKMPPDecoder *)rk_context->decoder_ref->data;
-    MPP_RET ret = MPP_NOK;
+    int ret = MPP_NOK;
 
     av_log(avctx, AV_LOG_DEBUG, "Flush.\n");
 
@@ -494,7 +494,7 @@ static void ffrkmpp_flush(AVCodecContext *avctx)
         av_log(avctx, AV_LOG_ERROR, "Failed to reset MPI (code = %d)\n", ret);
 }
 
-#define FFRKMPP_DEC_HWACCEL(NAME, ID) \
+#define RKMPP_DEC_HWACCEL(NAME, ID) \
   AVHWAccel ff_##NAME##_rkmpp_hwaccel = { \
       .name     = #NAME "_rkmpp", \
       .type     = AVMEDIA_TYPE_VIDEO,\
@@ -502,26 +502,26 @@ static void ffrkmpp_flush(AVCodecContext *avctx)
       .pix_fmt  = AV_PIX_FMT_DRM_PRIME,\
   };
 
-#define FFRKMPP_DEC_CLASS(NAME) \
-    static const AVClass ffrkmpp_##NAME##_dec_class = { \
+#define RKMPP_DEC_CLASS(NAME) \
+    static const AVClass rkmpp_##NAME##_dec_class = { \
         .class_name = "rkmpp_" #NAME "_dec", \
         .version    = LIBAVUTIL_VERSION_INT, \
     };
 
-#define FFRKMPP_DEC(NAME, ID, BSFS) \
-    FFRKMPP_DEC_CLASS(NAME) \
-    FFRKMPP_DEC_HWACCEL(NAME, ID) \
+#define RKMPP_DEC(NAME, ID, BSFS) \
+    RKMPP_DEC_CLASS(NAME) \
+    RKMPP_DEC_HWACCEL(NAME, ID) \
     AVCodec ff_##NAME##_rkmpp_decoder = { \
         .name           = #NAME "_rkmpp", \
         .long_name      = NULL_IF_CONFIG_SMALL(#NAME " (rkmpp)"), \
         .type           = AVMEDIA_TYPE_VIDEO, \
         .id             = ID, \
         .priv_data_size = sizeof(RKMPPDecodeContext), \
-        .init           = ffrkmpp_init_decoder, \
-        .close          = ffrkmpp_close_decoder, \
-        .receive_frame  = ffrkmpp_receive_frame, \
-        .flush          = ffrkmpp_flush, \
-        .priv_class     = &ffrkmpp_##NAME##_dec_class, \
+        .init           = rkmpp_init_decoder, \
+        .close          = rkmpp_close_decoder, \
+        .receive_frame  = rkmpp_receive_frame, \
+        .flush          = rkmpp_flush, \
+        .priv_class     = &rkmpp_##NAME##_dec_class, \
         .capabilities   = AV_CODEC_CAP_DELAY, \
         .caps_internal  = FF_CODEC_CAP_SETS_PKT_DTS, \
         .pix_fmts       = (const enum AVPixelFormat[]) { AV_PIX_FMT_DRM_PRIME, \
@@ -529,6 +529,6 @@ static void ffrkmpp_flush(AVCodecContext *avctx)
         .bsfs           = BSFS, \
     };
 
-FFRKMPP_DEC(h264, AV_CODEC_ID_H264, "h264_mp4toannexb")
-FFRKMPP_DEC(hevc, AV_CODEC_ID_HEVC, "hevc_mp4toannexb")
-FFRKMPP_DEC(vp8,  AV_CODEC_ID_VP8,  NULL)
+RKMPP_DEC(h264, AV_CODEC_ID_H264, "h264_mp4toannexb")
+RKMPP_DEC(hevc, AV_CODEC_ID_HEVC, "hevc_mp4toannexb")
+RKMPP_DEC(vp8,  AV_CODEC_ID_VP8,  NULL)
