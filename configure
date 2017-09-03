@@ -1521,6 +1521,7 @@ EXTERNAL_LIBRARY_VERSION3_LIST="
     libopencore_amrnb
     libopencore_amrwb
     libvo_amrwbenc
+    rkmpp
 "
 
 EXTERNAL_LIBRARY_GPLV3_LIST="
