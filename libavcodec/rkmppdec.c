@@ -40,6 +40,7 @@
 
 #define RECEIVE_FRAME_TIMEOUT   100
 #define FRAMEGROUP_MAX_FRAMES   16
+#define MAX_INPUT_SLOTS         4
 
 typedef struct {
     MppCtx ctx;
@@ -49,6 +50,7 @@ typedef struct {
     char first_frame;
     char first_packet;
     char eos_reached;
+    int free_input_slots;
 
     AVBufferRef *frames_ref;
     AVBufferRef *device_ref;
@@ -246,6 +248,7 @@ static int rkmpp_init_decoder(AVCodecContext *avctx)
     }
 
     decoder->first_packet = 1;
+    decoder->free_input_slots = MAX_INPUT_SLOTS;
 
     av_log(avctx, AV_LOG_DEBUG, "RKMPP decoder initialized successfully.\n");
 
@@ -292,6 +295,7 @@ static int rkmpp_send_packet(AVCodecContext *avctx, const AVPacket *avpkt)
                 av_log(avctx, AV_LOG_ERROR, "Failed to write extradata to decoder (code = %d)\n", ret);
                 return ret;
             }
+            decoder->free_input_slots--;
         }
         decoder->first_packet = 0;
     }
@@ -480,6 +484,7 @@ retry_get_frame:
             }
 
             decoder->first_frame = 0;
+            decoder->free_input_slots++;
             return 0;
         } else {
             av_log(avctx, AV_LOG_ERROR, "Failed to retrieve the frame buffer, frame is dropped (code = %d)\n", ret);
@@ -515,17 +520,9 @@ static int rkmpp_receive_frame(AVCodecContext *avctx, AVFrame *frame)
     RKMPPDecoder *decoder = (RKMPPDecoder *)rk_context->decoder_ref->data;
     int ret = MPP_NOK;
     AVPacket pkt = {0};
-    RK_S32 freeslots;
 
     if (!decoder->eos_reached) {
-        // we get the available slots in decoder
-        ret = decoder->mpi->control(decoder->ctx, MPP_DEC_GET_FREE_PACKET_SLOT_COUNT, &freeslots);
-        if (ret != MPP_OK) {
-            av_log(avctx, AV_LOG_ERROR, "Failed to get decoder free slots (code = %d).\n", ret);
-            return ret;
-        }
-
-        if (freeslots > 0) {
+        if (decoder->free_input_slots > 0) {
             ret = ff_decode_get_packet(avctx, &pkt);
             if (ret < 0 && ret != AVERROR_EOF) {
                 return ret;
@@ -541,7 +538,7 @@ static int rkmpp_receive_frame(AVCodecContext *avctx, AVFrame *frame)
         }
 
         // make sure we keep decoder full
-        if (freeslots > 1 && decoder->first_frame)
+        if (decoder->free_input_slots > 1 && decoder->first_frame)
             return AVERROR(EAGAIN);
     }
 
