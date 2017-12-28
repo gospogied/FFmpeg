@@ -5997,8 +5997,6 @@ enabled openssl           && { check_pkg_config openssl openssl openssl/ssl.h OP
                                die "ERROR: openssl not found"; }
 enabled rkmpp             && { { require_pkg_config rkmpp rockchip_mpp rockchip/rk_mpi.h mpp_create ||
                                  die "ERROR : Rockchip MPP was not found."; } &&
-                               { check_func_headers rockchip/rk_mpi_cmd.h "MPP_DEC_GET_FREE_PACKET_SLOT_COUNT" ||
-                                 die "ERROR: Rockchip MPP is outdated, please get a more recent one."; } &&
                                { enabled libdrm ||
                                  die "ERROR: rkmpp requires --enable-libdrm"; }
                              }
