@@ -185,6 +185,7 @@ static void register_all(void)
     REGISTER_DECODER(MPEG2_CRYSTALHD,   mpeg2_crystalhd);
     REGISTER_DECODER(MPEG2_V4L2M2M,     mpeg2_v4l2m2m);
     REGISTER_DECODER(MPEG2_QSV,         mpeg2_qsv);
+    REGISTER_DECODER(MPEG2_RKMPP,       mpeg2_rkmpp);
     REGISTER_DECODER(MPEG2_MEDIACODEC,  mpeg2_mediacodec);
     REGISTER_DECODER(MSA1,              msa1);
     REGISTER_DECODER(MSCC,              mscc);
