@@ -27,13 +27,12 @@
 extern AVInputFormat  ff_alsa_demuxer;
 extern AVOutputFormat ff_alsa_muxer;
 extern AVInputFormat  ff_android_camera_demuxer;
+extern AVOutputFormat ff_audiotoolbox_muxer;
 extern AVInputFormat  ff_avfoundation_demuxer;
 extern AVInputFormat  ff_bktr_demuxer;
 extern AVOutputFormat ff_caca_muxer;
 extern AVInputFormat  ff_decklink_demuxer;
 extern AVOutputFormat ff_decklink_muxer;
-extern AVInputFormat  ff_libndi_newtek_demuxer;
-extern AVOutputFormat ff_libndi_newtek_muxer;
 extern AVInputFormat  ff_dshow_demuxer;
 extern AVInputFormat  ff_fbdev_demuxer;
 extern AVOutputFormat ff_fbdev_muxer;

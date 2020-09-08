@@ -42,8 +42,7 @@ static av_cold int aom_init(AVCodecContext *avctx,
 {
     AV1DecodeContext *ctx           = avctx->priv_data;
     struct aom_codec_dec_cfg deccfg = {
-        /* token partitions+1 would be a decent choice */
-        .threads = FFMIN(avctx->thread_count, 16)
+        .threads = FFMIN(avctx->thread_count ? avctx->thread_count : av_cpu_count(), 16)
     };
 
     av_log(avctx, AV_LOG_INFO, "%s\n", aom_codec_version_str());
@@ -198,6 +197,14 @@ static int aom_decode(AVCodecContext *avctx, void *data, int *got_frame,
         }
         if ((ret = ff_get_buffer(avctx, picture, 0)) < 0)
             return ret;
+
+        av_reduce(&picture->sample_aspect_ratio.num,
+                  &picture->sample_aspect_ratio.den,
+                  picture->height * img->r_w,
+                  picture->width * img->r_h,
+                  INT_MAX);
+        ff_set_sar(avctx, picture->sample_aspect_ratio);
+
         if ((img->fmt & AOM_IMG_FMT_HIGHBITDEPTH) && img->bit_depth == 8)
             image_copy_16_to_8(picture, img);
         else

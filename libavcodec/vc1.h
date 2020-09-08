@@ -176,8 +176,6 @@ typedef struct VC1Context{
     H264ChromaContext h264chroma;
     VC1DSPContext vc1dsp;
 
-    int bits;
-
     /** Simple/Main Profile sequence header */
     //@{
     int res_sprite;       ///< reserved, sprite mode
@@ -422,7 +420,6 @@ void ff_vc1_init_transposed_scantables(VC1Context *v);
 int  ff_vc1_decode_end(AVCodecContext *avctx);
 void ff_vc1_decode_blocks(VC1Context *v);
 
-void ff_vc1_loop_filter_iblk(VC1Context *v, int pq);
 void ff_vc1_i_overlap_filter(VC1Context *v);
 void ff_vc1_p_overlap_filter(VC1Context *v);
 void ff_vc1_i_loop_filter(VC1Context *v);
