@@ -57,7 +57,7 @@ enum EvalMode {
     EVAL_MODE_NB
 };
 
-typedef struct {
+typedef struct VignetteContext {
     const AVClass *class;
     const AVPixFmtDescriptor *desc;
     int backward;
@@ -155,9 +155,6 @@ static double get_natural_factor(const VignetteContext *s, int x, int y)
     }
 }
 
-#define TS2D(ts)     ((ts) == AV_NOPTS_VALUE ? NAN : (double)(ts))
-#define TS2T(ts, tb) ((ts) == AV_NOPTS_VALUE ? NAN : (double)(ts) * av_q2d(tb))
-
 static void update_context(VignetteContext *s, AVFilterLink *inlink, AVFrame *frame)
 {
     int x, y;
@@ -165,7 +162,7 @@ static void update_context(VignetteContext *s, AVFilterLink *inlink, AVFrame *fr
     int dst_linesize = s->fmap_linesize;
 
     if (frame) {
-        s->var_values[VAR_N]   = inlink->frame_count;
+        s->var_values[VAR_N]   = inlink->frame_count_out;
         s->var_values[VAR_T]   = TS2T(frame->pts, inlink->time_base);
         s->var_values[VAR_PTS] = TS2D(frame->pts);
     } else {

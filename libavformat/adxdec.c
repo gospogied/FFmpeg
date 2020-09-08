@@ -34,7 +34,7 @@ typedef struct ADXDemuxerContext {
     int header_size;
 } ADXDemuxerContext;
 
-static int adx_probe(AVProbeData *p)
+static int adx_probe(const AVProbeData *p)
 {
     int offset;
     if (AV_RB16(p->buf) != 0x8000)
@@ -65,11 +65,9 @@ static int adx_read_packet(AVFormatContext *s, AVPacket *pkt)
 
     ret = av_get_packet(s->pb, pkt, size);
     if (ret != size) {
-        av_packet_unref(pkt);
         return ret < 0 ? ret : AVERROR(EIO);
     }
     if (AV_RB16(pkt->data) & 0x8000) {
-        av_packet_unref(pkt);
         return AVERROR_EOF;
     }
     pkt->size     = size;
@@ -83,7 +81,7 @@ static int adx_read_header(AVFormatContext *s)
 {
     ADXDemuxerContext *c = s->priv_data;
     AVCodecParameters *par;
-
+    int ret;
     AVStream *st = avformat_new_stream(s, NULL);
     if (!st)
         return AVERROR(ENOMEM);
@@ -94,8 +92,8 @@ static int adx_read_header(AVFormatContext *s)
     c->header_size = avio_rb16(s->pb) + 4;
     avio_seek(s->pb, -4, SEEK_CUR);
 
-    if (ff_get_extradata(s, par, s->pb, c->header_size) < 0)
-        return AVERROR(ENOMEM);
+    if ((ret = ff_get_extradata(s, par, s->pb, c->header_size)) < 0)
+        return ret;
 
     if (par->extradata_size < 12) {
         av_log(s, AV_LOG_ERROR, "Invalid extradata size.\n");
@@ -109,9 +107,14 @@ static int adx_read_header(AVFormatContext *s)
         return AVERROR_INVALIDDATA;
     }
 
+    if (par->sample_rate <= 0) {
+        av_log(s, AV_LOG_ERROR, "Invalid sample rate %d\n", par->sample_rate);
+        return AVERROR_INVALIDDATA;
+    }
+
     par->codec_type  = AVMEDIA_TYPE_AUDIO;
     par->codec_id    = s->iformat->raw_codec_id;
-    par->bit_rate    = par->sample_rate * par->channels * BLOCK_SIZE * 8LL / BLOCK_SAMPLES;
+    par->bit_rate    = (int64_t)par->sample_rate * par->channels * BLOCK_SIZE * 8LL / BLOCK_SAMPLES;
 
     avpriv_set_pts_info(st, 64, BLOCK_SAMPLES, par->sample_rate);
 

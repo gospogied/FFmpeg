@@ -22,6 +22,7 @@
 
 #include "avformat.h"
 #include "internal.h"
+#include "rawenc.h"
 #include "riff.h"
 #include "rso.h"
 
@@ -38,7 +39,7 @@ static int rso_write_header(AVFormatContext *s)
         return AVERROR_INVALIDDATA;
     }
 
-    if (!s->pb->seekable) {
+    if (!(s->pb->seekable & AVIO_SEEKABLE_NORMAL)) {
         av_log(s, AV_LOG_ERROR, "muxer does not support non seekable output\n");
         return AVERROR_INVALIDDATA;
     }
@@ -50,7 +51,7 @@ static int rso_write_header(AVFormatContext *s)
     }
 
     if (par->codec_id == AV_CODEC_ID_ADPCM_IMA_WAV) {
-        av_log(s, AV_LOG_ERROR, "ADPCM in RSO not implemented\n");
+        avpriv_report_missing_feature(s, "ADPCM in RSO");
         return AVERROR_PATCHWELCOME;
     }
 
@@ -60,14 +61,6 @@ static int rso_write_header(AVFormatContext *s)
     avio_wb16(pb, par->sample_rate);
     avio_wb16(pb, 0x0000);           /* play mode ? (0x0000 = don't loop) */
 
-    avio_flush(pb);
-
-    return 0;
-}
-
-static int rso_write_packet(AVFormatContext *s, AVPacket *pkt)
-{
-    avio_write(s->pb, pkt->data, pkt->size);
     return 0;
 }
 
@@ -105,7 +98,7 @@ AVOutputFormat ff_rso_muxer = {
     .audio_codec    =   AV_CODEC_ID_PCM_U8,
     .video_codec    =   AV_CODEC_ID_NONE,
     .write_header   =   rso_write_header,
-    .write_packet   =   rso_write_packet,
+    .write_packet   =   ff_raw_write_packet,
     .write_trailer  =   rso_write_trailer,
     .codec_tag      =   (const AVCodecTag* const []){ff_codec_rso_tags, 0},
     .flags          =   AVFMT_NOTIMESTAMPS,

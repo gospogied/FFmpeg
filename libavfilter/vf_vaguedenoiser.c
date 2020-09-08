@@ -38,10 +38,12 @@ typedef struct VagueDenoiserContext {
     float threshold;
     float percent;
     int method;
+    int type;
     int nsteps;
     int planes;
 
     int depth;
+    int bpc;
     int peak;
     int nb_planes;
     int planeheight[4];
@@ -52,10 +54,14 @@ typedef struct VagueDenoiserContext {
     float *out;
     float *tmp;
 
-    int hlowsize[32];
-    int hhighsize[32];
-    int vlowsize[32];
-    int vhighsize[32];
+    int hlowsize[4][32];
+    int hhighsize[4][32];
+    int vlowsize[4][32];
+    int vhighsize[4][32];
+
+    void (*thresholding)(float *block, const int width, const int height,
+                         const int stride, const float threshold,
+                         const float percent);
 } VagueDenoiserContext;
 
 #define OFFSET(x) offsetof(VagueDenoiserContext, x)
@@ -65,10 +71,13 @@ static const AVOption vaguedenoiser_options[] = {
     { "method",    "set filtering method",     OFFSET(method),    AV_OPT_TYPE_INT,   {.i64=2 },  0, 2,      FLAGS, "method" },
         { "hard",   "hard thresholding",       0,                 AV_OPT_TYPE_CONST, {.i64=0},   0, 0,      FLAGS, "method" },
         { "soft",   "soft thresholding",       0,                 AV_OPT_TYPE_CONST, {.i64=1},   0, 0,      FLAGS, "method" },
-        { "garrote", "garotte thresholding",   0,                 AV_OPT_TYPE_CONST, {.i64=2},   0, 0,      FLAGS, "method" },
+        { "garrote", "garrote thresholding",   0,                 AV_OPT_TYPE_CONST, {.i64=2},   0, 0,      FLAGS, "method" },
     { "nsteps",    "set number of steps",      OFFSET(nsteps),    AV_OPT_TYPE_INT,   {.i64=6 },  1, 32,     FLAGS },
     { "percent", "set percent of full denoising", OFFSET(percent),AV_OPT_TYPE_FLOAT, {.dbl=85},  0,100,     FLAGS },
     { "planes",    "set planes to filter",     OFFSET(planes),    AV_OPT_TYPE_INT,   {.i64=15 }, 0, 15,     FLAGS },
+    { "type",    "set threshold type",     OFFSET(type),          AV_OPT_TYPE_INT,   {.i64=0 },  0, 1,      FLAGS, "type" },
+        { "universal",  "universal (VisuShrink)", 0,              AV_OPT_TYPE_CONST, {.i64=0},   0, 0,      FLAGS, "type" },
+        { "bayes",      "bayes (BayesShrink)",    0,              AV_OPT_TYPE_CONST, {.i64=1},   0, 0,      FLAGS, "type" },
     { NULL }
 };
 
@@ -99,8 +108,8 @@ static const float synthesis_high[9] = {
 static int query_formats(AVFilterContext *ctx)
 {
     static const enum AVPixelFormat pix_fmts[] = {
-        AV_PIX_FMT_GRAY8,
-        AV_PIX_FMT_GRAY16,
+        AV_PIX_FMT_GRAY8, AV_PIX_FMT_GRAY9, AV_PIX_FMT_GRAY10,
+        AV_PIX_FMT_GRAY12, AV_PIX_FMT_GRAY14, AV_PIX_FMT_GRAY16,
         AV_PIX_FMT_YUV410P, AV_PIX_FMT_YUV411P,
         AV_PIX_FMT_YUV420P, AV_PIX_FMT_YUV422P,
         AV_PIX_FMT_YUV440P, AV_PIX_FMT_YUV444P,
@@ -116,6 +125,11 @@ static int query_formats(AVFilterContext *ctx)
         AV_PIX_FMT_YUV420P16, AV_PIX_FMT_YUV422P16, AV_PIX_FMT_YUV444P16,
         AV_PIX_FMT_GBRP, AV_PIX_FMT_GBRP9, AV_PIX_FMT_GBRP10,
         AV_PIX_FMT_GBRP12, AV_PIX_FMT_GBRP14, AV_PIX_FMT_GBRP16,
+        AV_PIX_FMT_YUVA420P,  AV_PIX_FMT_YUVA422P,   AV_PIX_FMT_YUVA444P,
+        AV_PIX_FMT_YUVA444P9, AV_PIX_FMT_YUVA444P10, AV_PIX_FMT_YUVA444P12, AV_PIX_FMT_YUVA444P16,
+        AV_PIX_FMT_YUVA422P9, AV_PIX_FMT_YUVA422P10, AV_PIX_FMT_YUVA422P12, AV_PIX_FMT_YUVA422P16,
+        AV_PIX_FMT_YUVA420P9, AV_PIX_FMT_YUVA420P10, AV_PIX_FMT_YUVA420P16,
+        AV_PIX_FMT_GBRAP,     AV_PIX_FMT_GBRAP10,    AV_PIX_FMT_GBRAP12,    AV_PIX_FMT_GBRAP16,
         AV_PIX_FMT_NONE
     };
     AVFilterFormats *fmts_list = ff_make_format_list(pix_fmts);
@@ -128,9 +142,10 @@ static int config_input(AVFilterLink *inlink)
 {
     VagueDenoiserContext *s = inlink->dst->priv;
     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(inlink->format);
-    int nsteps_width, nsteps_height, nsteps_max;
+    int p, i, nsteps_width, nsteps_height, nsteps_max;
 
     s->depth = desc->comp[0].depth;
+    s->bpc = (s->depth + 7) / 8;
     s->nb_planes = desc->nb_components;
 
     s->planeheight[1] = s->planeheight[2] = AV_CEIL_RSHIFT(inlink->h, desc->log2_chroma_h);
@@ -158,6 +173,20 @@ static int config_input(AVFilterLink *inlink)
     }
 
     s->nsteps = FFMIN(s->nsteps, nsteps_max - 2);
+
+    for (p = 0; p < 4; p++) {
+        s->hlowsize[p][0]  = (s->planewidth[p] + 1) >> 1;
+        s->hhighsize[p][0] =  s->planewidth[p] >> 1;
+        s->vlowsize[p][0]  = (s->planeheight[p] + 1) >> 1;
+        s->vhighsize[p][0] =  s->planeheight[p] >> 1;
+
+        for (i = 1; i < s->nsteps; i++) {
+            s->hlowsize[p][i]  = (s->hlowsize[p][i - 1] + 1) >> 1;
+            s->hhighsize[p][i] =  s->hlowsize[p][i - 1] >> 1;
+            s->vlowsize[p][i]  = (s->vlowsize[p][i - 1] + 1) >> 1;
+            s->vhighsize[p][i] =  s->vlowsize[p][i - 1] >> 1;
+        }
+    }
 
     return 0;
 }
@@ -323,22 +352,14 @@ static void hard_thresholding(float *block, const int width, const int height,
 }
 
 static void soft_thresholding(float *block, const int width, const int height, const int stride,
-                              const float threshold, const float percent, const int nsteps)
+                              const float threshold, const float percent)
 {
     const float frac = 1.f - percent * 0.01f;
     const float shift = threshold * 0.01f * percent;
-    int w = width;
-    int h = height;
-    int y, x, l;
-
-    for (l = 0; l < nsteps; l++) {
-        w = (w + 1) >> 1;
-        h = (h + 1) >> 1;
-    }
+    int y, x;
 
     for (y = 0; y < height; y++) {
-        const int x0 = (y < h) ? w : 0;
-        for (x = x0; x < width; x++) {
+        for (x = 0; x < width; x++) {
             const float temp = FFABS(block[x]);
             if (temp <= threshold)
                 block[x] *= frac;
@@ -372,6 +393,23 @@ static void qian_thresholding(float *block, const int width, const int height,
     }
 }
 
+static float bayes_threshold(float *block, const int width, const int height,
+                              const int stride, const float threshold)
+{
+    float mean = 0.f;
+
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            mean += block[x] * block[x];
+        }
+        block += stride;
+    }
+
+    mean /= width * height;
+
+    return threshold * threshold / (FFMAX(sqrtf(mean - threshold), FLT_EPSILON));
+}
+
 static void filter(VagueDenoiserContext *s, AVFrame *in, AVFrame *out)
 {
     int p, y, x, i, j;
@@ -392,7 +430,7 @@ static void filter(VagueDenoiserContext *s, AVFrame *in, AVFrame *out)
 
         if (!((1 << p) & s->planes)) {
             av_image_copy_plane(out->data[p], out->linesize[p], in->data[p], in->linesize[p],
-                                s->planewidth[p], s->planeheight[p]);
+                                s->planewidth[p] * s->bpc, s->planeheight[p]);
             continue;
         }
 
@@ -435,28 +473,32 @@ static void filter(VagueDenoiserContext *s, AVFrame *in, AVFrame *out)
             v_low_size0 = (v_low_size0 + 1) >> 1;
         }
 
-        if (s->method == 0)
-            hard_thresholding(s->block, width, height, width, s->threshold, s->percent);
-        else if (s->method == 1)
-            soft_thresholding(s->block, width, height, width, s->threshold, s->percent, s->nsteps);
-        else
-            qian_thresholding(s->block, width, height, width, s->threshold, s->percent);
+        if (s->type == 0) {
+            s->thresholding(s->block, width, height, width, s->threshold, s->percent);
+        } else {
+            for (int n = 0; n < s->nsteps; n++) {
+                float threshold;
+                float *block;
 
-        s->hlowsize[0]  = (width + 1) >> 1;
-        s->hhighsize[0] = width >> 1;
-        s->vlowsize[0]  = (height + 1) >> 1;
-        s->vhighsize[0] = height >> 1;
-
-        for (i = 1; i < s->nsteps; i++) {
-            s->hlowsize[i]  = (s->hlowsize[i - 1] + 1) >> 1;
-            s->hhighsize[i] = s->hlowsize[i - 1] >> 1;
-            s->vlowsize[i]  = (s->vlowsize[i - 1] + 1) >> 1;
-            s->vhighsize[i] = s->vlowsize[i - 1] >> 1;
+                if (n == s->nsteps - 1) {
+                    threshold = bayes_threshold(s->block, s->hlowsize[p][n], s->vlowsize[p][n], width, s->threshold);
+                    s->thresholding(s->block, s->hlowsize[p][n], s->vlowsize[p][n], width, threshold, s->percent);
+                }
+                block = s->block + s->hlowsize[p][n];
+                threshold = bayes_threshold(block, s->hhighsize[p][n], s->vlowsize[p][n], width, s->threshold);
+                s->thresholding(block, s->hhighsize[p][n], s->vlowsize[p][n], width, threshold, s->percent);
+                block = s->block + s->vlowsize[p][n] * width;
+                threshold = bayes_threshold(block, s->hlowsize[p][n], s->vhighsize[p][n], width, s->threshold);
+                s->thresholding(block, s->hlowsize[p][n], s->vhighsize[p][n], width, threshold, s->percent);
+                block = s->block + s->hlowsize[p][n] + s->vlowsize[p][n] * width;
+                threshold = bayes_threshold(block, s->hhighsize[p][n], s->vhighsize[p][n], width, s->threshold);
+                s->thresholding(block, s->hhighsize[p][n], s->vhighsize[p][n], width, threshold, s->percent);
+            }
         }
 
         while (nsteps_invert--) {
-            const int idx = s->vlowsize[nsteps_invert] + s->vhighsize[nsteps_invert];
-            const int idx2 = s->hlowsize[nsteps_invert] + s->hhighsize[nsteps_invert];
+            const int idx = s->vlowsize[p][nsteps_invert]  + s->vhighsize[p][nsteps_invert];
+            const int idx2 = s->hlowsize[p][nsteps_invert] + s->hhighsize[p][nsteps_invert];
             float * idx3 = s->block;
             for (i = 0; i < idx2; i++) {
                 copyv(idx3, width, s->in + NPAD, idx);
@@ -520,6 +562,25 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
     return ff_filter_frame(outlink, out);
 }
 
+static av_cold int init(AVFilterContext *ctx)
+{
+    VagueDenoiserContext *s = ctx->priv;
+
+    switch (s->method) {
+    case 0:
+        s->thresholding = hard_thresholding;
+        break;
+    case 1:
+        s->thresholding = soft_thresholding;
+        break;
+    case 2:
+        s->thresholding = qian_thresholding;
+        break;
+    }
+
+    return 0;
+}
+
 static av_cold void uninit(AVFilterContext *ctx)
 {
     VagueDenoiserContext *s = ctx->priv;
@@ -554,6 +615,7 @@ AVFilter ff_vf_vaguedenoiser = {
     .description   = NULL_IF_CONFIG_SMALL("Apply a Wavelet based Denoiser."),
     .priv_size     = sizeof(VagueDenoiserContext),
     .priv_class    = &vaguedenoiser_class,
+    .init          = init,
     .uninit        = uninit,
     .query_formats = query_formats,
     .inputs        = vaguedenoiser_inputs,

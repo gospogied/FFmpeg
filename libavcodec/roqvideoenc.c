@@ -736,21 +736,6 @@ static void reconstruct_and_encode_image(RoqContext *enc, RoqTempdata *tempData,
     /* Flush the remainder of the argument/type spool */
     while (spool.typeSpoolLength)
         write_typecode(&spool, 0x0);
-
-#if 0
-    uint8_t *fdata[3] = {enc->frame_to_enc->data[0],
-                           enc->frame_to_enc->data[1],
-                           enc->frame_to_enc->data[2]};
-    uint8_t *cdata[3] = {enc->current_frame->data[0],
-                           enc->current_frame->data[1],
-                           enc->current_frame->data[2]};
-    av_log(enc->avctx, AV_LOG_ERROR, "Expected distortion: %i Actual: %i\n",
-           dist,
-           block_sse(fdata, cdata, 0, 0, 0, 0,
-                     enc->frame_to_enc->linesize,
-                     enc->current_frame->linesize,
-                     enc->width));  //WARNING: Square dimensions implied...
-#endif
 }
 
 
@@ -1019,10 +1004,8 @@ static av_cold int roq_encode_init(AVCodecContext *avctx)
 
     enc->last_frame    = av_frame_alloc();
     enc->current_frame = av_frame_alloc();
-    if (!enc->last_frame || !enc->current_frame) {
-        roq_encode_end(avctx);
+    if (!enc->last_frame || !enc->current_frame)
         return AVERROR(ENOMEM);
-    }
 
     enc->tmpData      = av_malloc(sizeof(RoqTempdata));
 
@@ -1039,10 +1022,8 @@ static av_cold int roq_encode_init(AVCodecContext *avctx)
         av_malloc_array ((enc->width*enc->height/64), sizeof(motion_vect));
 
     if (!enc->tmpData || !enc->this_motion4 || !enc->last_motion4 ||
-        !enc->this_motion8 || !enc->last_motion8) {
-        roq_encode_end(avctx);
+        !enc->this_motion8 || !enc->last_motion8)
         return AVERROR(ENOMEM);
-    }
 
     return 0;
 }
@@ -1150,4 +1131,5 @@ AVCodec ff_roq_encoder = {
     .pix_fmts             = (const enum AVPixelFormat[]){ AV_PIX_FMT_YUVJ444P,
                                                         AV_PIX_FMT_NONE },
     .priv_class     = &roq_class,
+    .caps_internal        = FF_CODEC_CAP_INIT_CLEANUP,
 };

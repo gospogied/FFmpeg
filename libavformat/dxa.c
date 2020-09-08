@@ -37,7 +37,7 @@ typedef struct DXAContext {
     int readvid;
 }DXAContext;
 
-static int dxa_probe(AVProbeData *p)
+static int dxa_probe(const AVProbeData *p)
 {
     int w, h;
     if (p->buf_size < 15)
@@ -171,14 +171,16 @@ static int dxa_read_packet(AVFormatContext *s, AVPacket *pkt)
     }
     avio_seek(s->pb, c->vidpos, SEEK_SET);
     while(!avio_feof(s->pb) && c->frames){
+        uint32_t tag;
         if ((ret = avio_read(s->pb, buf, 4)) != 4) {
             av_log(s, AV_LOG_ERROR, "failed reading chunk type\n");
             return ret < 0 ? ret : AVERROR_INVALIDDATA;
         }
-        switch(AV_RL32(buf)){
+        tag = AV_RL32(buf);
+        switch (tag) {
         case MKTAG('N', 'U', 'L', 'L'):
-            if(av_new_packet(pkt, 4 + pal_size) < 0)
-                return AVERROR(ENOMEM);
+            if ((ret = av_new_packet(pkt, 4 + pal_size)) < 0)
+                return ret;
             pkt->stream_index = 0;
             if(pal_size) memcpy(pkt->data, pal, pal_size);
             memcpy(pkt->data + pal_size, buf, 4);
@@ -202,12 +204,12 @@ static int dxa_read_packet(AVFormatContext *s, AVPacket *pkt)
                        size);
                 return AVERROR_INVALIDDATA;
             }
-            if(av_new_packet(pkt, size + DXA_EXTRA_SIZE + pal_size) < 0)
-                return AVERROR(ENOMEM);
+            ret = av_new_packet(pkt, size + DXA_EXTRA_SIZE + pal_size);
+            if (ret < 0)
+                return ret;
             memcpy(pkt->data + pal_size, buf, DXA_EXTRA_SIZE);
             ret = avio_read(s->pb, pkt->data + DXA_EXTRA_SIZE + pal_size, size);
             if(ret != size){
-                av_packet_unref(pkt);
                 return AVERROR(EIO);
             }
             if(pal_size) memcpy(pkt->data, pal, pal_size);
@@ -217,7 +219,7 @@ static int dxa_read_packet(AVFormatContext *s, AVPacket *pkt)
             c->readvid = 0;
             return 0;
         default:
-            av_log(s, AV_LOG_ERROR, "Unknown tag %c%c%c%c\n", buf[0], buf[1], buf[2], buf[3]);
+            av_log(s, AV_LOG_ERROR, "Unknown tag %s\n", av_fourcc2str(tag));
             return AVERROR_INVALIDDATA;
         }
     }

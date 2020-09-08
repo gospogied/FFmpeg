@@ -300,8 +300,11 @@ static int parse_object_segment(AVCodecContext *avctx,
 
     av_fast_padded_malloc(&object->rle, &object->rle_buffer_size, rle_bitmap_len);
 
-    if (!object->rle)
+    if (!object->rle) {
+        object->rle_data_len = 0;
+        object->rle_remaining_len = 0;
         return AVERROR(ENOMEM);
+    }
 
     memcpy(object->rle, buf, buf_size);
     object->rle_data_len = buf_size;
@@ -556,12 +559,13 @@ static int display_end_segment(AVCodecContext *avctx, void *data,
 
         sub->rects[i]->x    = ctx->presentation.objects[i].x;
         sub->rects[i]->y    = ctx->presentation.objects[i].y;
-        sub->rects[i]->w    = object->w;
-        sub->rects[i]->h    = object->h;
-
-        sub->rects[i]->linesize[0] = object->w;
 
         if (object->rle) {
+            sub->rects[i]->w    = object->w;
+            sub->rects[i]->h    = object->h;
+
+            sub->rects[i]->linesize[0] = object->w;
+
             if (object->rle_remaining_len) {
                 av_log(avctx, AV_LOG_ERROR, "RLE data length %u is %u bytes shorter than expected\n",
                        object->rle_data_len, object->rle_remaining_len);
@@ -610,7 +614,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
     return 1;
 }
 
-static int decode(AVCodecContext *avctx, void *data, int *data_size,
+static int decode(AVCodecContext *avctx, void *data, int *got_sub_ptr,
                   AVPacket *avpkt)
 {
     const uint8_t *buf = avpkt->data;
@@ -632,7 +636,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size,
     if (i & 15)
         ff_dlog(avctx, "\n");
 
-    *data_size = 0;
+    *got_sub_ptr = 0;
 
     /* Ensure that we have received at a least a segment code and segment length */
     if (buf_size < 3)
@@ -672,9 +676,14 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size,
              */
             break;
         case DISPLAY_SEGMENT:
+            if (*got_sub_ptr) {
+                av_log(avctx, AV_LOG_ERROR, "Duplicate display segment\n");
+                ret = AVERROR_INVALIDDATA;
+                break;
+            }
             ret = display_end_segment(avctx, data, buf, segment_length);
             if (ret >= 0)
-                *data_size = ret;
+                *got_sub_ptr = ret;
             break;
         default:
             av_log(avctx, AV_LOG_ERROR, "Unknown subtitle segment type 0x%x, length %d\n",
@@ -682,8 +691,11 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size,
             ret = AVERROR_INVALIDDATA;
             break;
         }
-        if (ret < 0 && (avctx->err_recognition & AV_EF_EXPLODE))
+        if (ret < 0 && (avctx->err_recognition & AV_EF_EXPLODE)) {
+            avsubtitle_free(data);
+            *got_sub_ptr = 0;
             return ret;
+        }
 
         buf += segment_length;
     }

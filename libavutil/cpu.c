@@ -16,8 +16,11 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include <stddef.h>
 #include <stdint.h>
+#include <stdatomic.h>
 
+#include "attributes.h"
 #include "cpu.h"
 #include "cpu_internal.h"
 #include "config.h"
@@ -44,10 +47,26 @@
 #include <unistd.h>
 #endif
 
-static int flags, checked;
+static atomic_int cpu_flags = ATOMIC_VAR_INIT(-1);
+
+static int get_cpu_flags(void)
+{
+    if (ARCH_MIPS)
+        return ff_get_cpu_flags_mips();
+    if (ARCH_AARCH64)
+        return ff_get_cpu_flags_aarch64();
+    if (ARCH_ARM)
+        return ff_get_cpu_flags_arm();
+    if (ARCH_PPC)
+        return ff_get_cpu_flags_ppc();
+    if (ARCH_X86)
+        return ff_get_cpu_flags_x86();
+    return 0;
+}
 
 void av_force_cpu_flags(int arg){
-    if (   (arg & ( AV_CPU_FLAG_3DNOW    |
+    if (ARCH_X86 &&
+           (arg & ( AV_CPU_FLAG_3DNOW    |
                     AV_CPU_FLAG_3DNOWEXT |
                     AV_CPU_FLAG_MMXEXT   |
                     AV_CPU_FLAG_SSE      |
@@ -63,39 +82,30 @@ void av_force_cpu_flags(int arg){
                     AV_CPU_FLAG_XOP      |
                     AV_CPU_FLAG_FMA3     |
                     AV_CPU_FLAG_FMA4     |
-                    AV_CPU_FLAG_AVX2     ))
+                    AV_CPU_FLAG_AVX2     |
+                    AV_CPU_FLAG_AVX512   ))
         && !(arg & AV_CPU_FLAG_MMX)) {
         av_log(NULL, AV_LOG_WARNING, "MMX implied by specified flags\n");
         arg |= AV_CPU_FLAG_MMX;
     }
 
-    flags   = arg;
-    checked = arg != -1;
+    atomic_store_explicit(&cpu_flags, arg, memory_order_relaxed);
 }
 
 int av_get_cpu_flags(void)
 {
-    if (checked)
-        return flags;
-
-    if (ARCH_AARCH64)
-        flags = ff_get_cpu_flags_aarch64();
-    if (ARCH_ARM)
-        flags = ff_get_cpu_flags_arm();
-    if (ARCH_PPC)
-        flags = ff_get_cpu_flags_ppc();
-    if (ARCH_X86)
-        flags = ff_get_cpu_flags_x86();
-
-    checked = 1;
+    int flags = atomic_load_explicit(&cpu_flags, memory_order_relaxed);
+    if (flags == -1) {
+        flags = get_cpu_flags();
+        atomic_store_explicit(&cpu_flags, flags, memory_order_relaxed);
+    }
     return flags;
 }
 
 void av_set_cpu_flags_mask(int mask)
 {
-    checked       = 0;
-    flags         = av_get_cpu_flags() & mask;
-    checked       = 1;
+    atomic_store_explicit(&cpu_flags, get_cpu_flags() & mask,
+                          memory_order_relaxed);
 }
 
 int av_parse_cpu_flags(const char *s)
@@ -119,6 +129,7 @@ int av_parse_cpu_flags(const char *s)
 #define CPUFLAG_AVX2     (AV_CPU_FLAG_AVX2     | CPUFLAG_AVX)
 #define CPUFLAG_BMI2     (AV_CPU_FLAG_BMI2     | AV_CPU_FLAG_BMI1)
 #define CPUFLAG_AESNI    (AV_CPU_FLAG_AESNI    | CPUFLAG_SSE42)
+#define CPUFLAG_AVX512   (AV_CPU_FLAG_AVX512   | CPUFLAG_AVX2)
     static const AVOption cpuflags_opts[] = {
         { "flags"   , NULL, 0, AV_OPT_TYPE_FLAGS, { .i64 = 0 }, INT64_MIN, INT64_MAX, .unit = "flags" },
 #if   ARCH_PPC
@@ -147,6 +158,7 @@ int av_parse_cpu_flags(const char *s)
         { "3dnowext", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = CPUFLAG_3DNOWEXT     },    .unit = "flags" },
         { "cmov",     NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_CMOV     },    .unit = "flags" },
         { "aesni"   , NULL, 0, AV_OPT_TYPE_CONST, { .i64 = CPUFLAG_AESNI        },    .unit = "flags" },
+        { "avx512"  , NULL, 0, AV_OPT_TYPE_CONST, { .i64 = CPUFLAG_AVX512       },    .unit = "flags" },
 #elif ARCH_ARM
         { "armv5te",  NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_ARMV5TE  },    .unit = "flags" },
         { "armv6",    NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_ARMV6    },    .unit = "flags" },
@@ -159,6 +171,9 @@ int av_parse_cpu_flags(const char *s)
         { "armv8",    NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_ARMV8    },    .unit = "flags" },
         { "neon",     NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_NEON     },    .unit = "flags" },
         { "vfp",      NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_VFP      },    .unit = "flags" },
+#elif ARCH_MIPS
+        { "mmi",      NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_MMI      },    .unit = "flags" },
+        { "msa",      NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_MSA      },    .unit = "flags" },
 #endif
         { NULL },
     };
@@ -209,6 +224,7 @@ int av_parse_cpu_caps(unsigned *flags, const char *s)
         { "3dnowext", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_3DNOWEXT },    .unit = "flags" },
         { "cmov",     NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_CMOV     },    .unit = "flags" },
         { "aesni",    NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_AESNI    },    .unit = "flags" },
+        { "avx512"  , NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_AVX512   },    .unit = "flags" },
 
 #define CPU_FLAG_P2 AV_CPU_FLAG_CMOV | AV_CPU_FLAG_MMX
 #define CPU_FLAG_P3 CPU_FLAG_P2 | AV_CPU_FLAG_MMX2 | AV_CPU_FLAG_SSE
@@ -239,6 +255,9 @@ int av_parse_cpu_caps(unsigned *flags, const char *s)
         { "armv8",    NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_ARMV8    },    .unit = "flags" },
         { "neon",     NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_NEON     },    .unit = "flags" },
         { "vfp",      NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_VFP      },    .unit = "flags" },
+#elif ARCH_MIPS
+        { "mmi",      NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_MMI      },    .unit = "flags" },
+        { "msa",      NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AV_CPU_FLAG_MSA      },    .unit = "flags" },
 #endif
         { NULL },
     };
@@ -293,4 +312,20 @@ int av_cpu_count(void)
     }
 
     return nb_cpus;
+}
+
+size_t av_cpu_max_align(void)
+{
+    if (ARCH_MIPS)
+        return ff_get_cpu_max_align_mips();
+    if (ARCH_AARCH64)
+        return ff_get_cpu_max_align_aarch64();
+    if (ARCH_ARM)
+        return ff_get_cpu_max_align_arm();
+    if (ARCH_PPC)
+        return ff_get_cpu_max_align_ppc();
+    if (ARCH_X86)
+        return ff_get_cpu_max_align_x86();
+
+    return 8;
 }

@@ -47,8 +47,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "cmdutils.h"
-
 #include "libavformat/avformat.h"
 #include "libavformat/isom.h"
 #include "libavformat/os_support.h"
@@ -375,7 +373,7 @@ static int read_tfra(struct Tracks *tracks, int start_index, AVIOContext *f)
                                                      track->duration -
                                                      track->offsets[track->chunks - 1].time;
     }
-    // Now try and read the actual durations from the trun sample data.
+    // Now try to read the actual durations from the trun sample data.
     for (i = 0; i < track->chunks; i++) {
         int64_t duration = read_moof_duration(f, track->offsets[i].offset);
         if (duration > 0 && llabs(duration - track->offsets[i].duration) > 3) {
@@ -792,8 +790,6 @@ int main(int argc, char **argv)
     char output_prefix_buf[2048];
     int split = 0, ismf = 0, i;
     struct Tracks tracks = { 0, .video_track = -1, .audio_track = -1 };
-
-    av_register_all();
 
     for (i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-n")) {

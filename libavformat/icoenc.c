@@ -82,7 +82,7 @@ static int ico_write_header(AVFormatContext *s)
     int ret;
     int i;
 
-    if (!pb->seekable) {
+    if (!(pb->seekable & AVIO_SEEKABLE_NORMAL)) {
         av_log(s, AV_LOG_ERROR, "Output is not seekable\n");
         return AVERROR(EINVAL);
     }
@@ -105,8 +105,6 @@ static int ico_write_header(AVFormatContext *s)
     ico->images = av_mallocz_array(ico->nb_images, sizeof(IcoMuxContext));
     if (!ico->images)
         return AVERROR(ENOMEM);
-
-    avio_flush(pb);
 
     return 0;
 }
@@ -183,9 +181,14 @@ static int ico_write_trailer(AVFormatContext *s)
         avio_wl32(pb, ico->images[i].offset);
     }
 
-    av_freep(&ico->images);
-
     return 0;
+}
+
+static void ico_deinit(AVFormatContext *s)
+{
+    IcoMuxContext *ico = s->priv_data;
+
+    av_freep(&ico->images);
 }
 
 AVOutputFormat ff_ico_muxer = {
@@ -199,5 +202,6 @@ AVOutputFormat ff_ico_muxer = {
     .write_header   = ico_write_header,
     .write_packet   = ico_write_packet,
     .write_trailer  = ico_write_trailer,
+    .deinit         = ico_deinit,
     .flags          = AVFMT_NOTIMESTAMPS,
 };

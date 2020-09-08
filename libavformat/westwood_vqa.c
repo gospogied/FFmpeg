@@ -62,7 +62,7 @@ typedef struct WsVqaDemuxContext {
     int video_stream_index;
 } WsVqaDemuxContext;
 
-static int wsvqa_probe(AVProbeData *p)
+static int wsvqa_probe(const AVProbeData *p)
 {
     /* need 12 bytes to qualify */
     if (p->buf_size < 12)
@@ -85,7 +85,7 @@ static int wsvqa_read_header(AVFormatContext *s)
     uint8_t scratch[VQA_PREAMBLE_SIZE];
     uint32_t chunk_tag;
     uint32_t chunk_size;
-    int fps;
+    int fps, ret;
 
     /* initialize the video decoder stream */
     st = avformat_new_stream(s, NULL);
@@ -101,8 +101,8 @@ static int wsvqa_read_header(AVFormatContext *s)
     avio_seek(pb, 20, SEEK_SET);
 
     /* the VQA header needs to go to the decoder */
-    if (ff_get_extradata(s, st->codecpar, pb, VQA_HEADER_SIZE) < 0)
-        return AVERROR(ENOMEM);
+    if ((ret = ff_get_extradata(s, st->codecpar, pb, VQA_HEADER_SIZE)) < 0)
+        return ret;
     header = st->codecpar->extradata;
     st->codecpar->width = AV_RL16(&header[6]);
     st->codecpar->height = AV_RL16(&header[8]);
@@ -144,9 +144,8 @@ static int wsvqa_read_header(AVFormatContext *s)
             break;
 
         default:
-            av_log (s, AV_LOG_ERROR, " note: unknown chunk seen (%c%c%c%c)\n",
-                scratch[0], scratch[1],
-                scratch[2], scratch[3]);
+            av_log(s, AV_LOG_ERROR, " note: unknown chunk seen (%s)\n",
+                   av_fourcc2str(chunk_tag));
             break;
         }
 
@@ -215,8 +214,8 @@ static int wsvqa_read_packet(AVFormatContext *s,
                         break;
                     case SND2_TAG:
                         st->codecpar->codec_id = AV_CODEC_ID_ADPCM_IMA_WS;
-                        if (ff_alloc_extradata(st->codecpar, 2))
-                            return AVERROR(ENOMEM);
+                        if ((ret = ff_alloc_extradata(st->codecpar, 2)) < 0)
+                            return ret;
                         AV_WL16(st->codecpar->extradata, wsvqa->version);
                         break;
                     }
@@ -251,7 +250,8 @@ static int wsvqa_read_packet(AVFormatContext *s,
             case CMDS_TAG:
                 break;
             default:
-                av_log(s, AV_LOG_INFO, "Skipping unknown chunk 0x%08X\n", chunk_type);
+                av_log(s, AV_LOG_INFO, "Skipping unknown chunk %s\n",
+                       av_fourcc2str(av_bswap32(chunk_type)));
             }
             avio_skip(pb, chunk_size + skip_byte);
         }

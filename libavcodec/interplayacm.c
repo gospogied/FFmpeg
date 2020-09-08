@@ -62,6 +62,11 @@ static av_cold int decode_init(AVCodecContext *avctx)
     if (avctx->extradata_size < 14)
         return AVERROR_INVALIDDATA;
 
+    if (avctx->channels <= 0) {
+        av_log(avctx, AV_LOG_ERROR, "Invalid number of channels: %d\n", avctx->channels);
+        return AVERROR_INVALIDDATA;
+    }
+
     s->level = AV_RL16(avctx->extradata + 12) & 0xf;
     s->rows  = AV_RL16(avctx->extradata + 12) >>  4;
     s->cols  = 1 << s->level;
@@ -72,7 +77,7 @@ static av_cold int decode_init(AVCodecContext *avctx)
     s->block   = av_calloc(s->block_len, sizeof(int));
     s->wrapbuf = av_calloc(s->wrapbuf_len, sizeof(int));
     s->ampbuf  = av_calloc(0x10000, sizeof(int));
-    s->bitstream = av_calloc(s->max_framesize, sizeof(*s->bitstream));
+    s->bitstream = av_calloc(s->max_framesize + AV_INPUT_BUFFER_PADDING_SIZE / sizeof(*s->bitstream) + 1, sizeof(*s->bitstream));
     if (!s->block || !s->wrapbuf || !s->ampbuf || !s->bitstream)
         return AVERROR(ENOMEM);
 
@@ -326,6 +331,10 @@ static int t15(InterplayACMContext *s, unsigned ind, unsigned col)
     for (i = 0; i < s->rows; i++) {
         /* b = (x1) + (x2 * 3) + (x3 * 9) */
         b = get_bits(gb, 5);
+        if (b > 26) {
+            av_log(NULL, AV_LOG_ERROR, "Too large b = %d > 26\n", b);
+            return AVERROR_INVALIDDATA;
+        }
 
         n1 =  (mul_3x3[b] & 0x0F) - 1;
         n2 = ((mul_3x3[b] >> 4) & 0x0F) - 1;
@@ -351,6 +360,10 @@ static int t27(InterplayACMContext *s, unsigned ind, unsigned col)
     for (i = 0; i < s->rows; i++) {
         /* b = (x1) + (x2 * 5) + (x3 * 25) */
         b = get_bits(gb, 7);
+        if (b > 124) {
+            av_log(NULL, AV_LOG_ERROR, "Too large b = %d > 124\n", b);
+            return AVERROR_INVALIDDATA;
+        }
 
         n1 =  (mul_3x5[b] & 0x0F) - 2;
         n2 = ((mul_3x5[b] >> 4) & 0x0F) - 2;
@@ -375,6 +388,10 @@ static int t37(InterplayACMContext *s, unsigned ind, unsigned col)
     for (i = 0; i < s->rows; i++) {
         /* b = (x1) + (x2 * 11) */
         b = get_bits(gb, 7);
+        if (b > 120) {
+            av_log(NULL, AV_LOG_ERROR, "Too large b = %d > 120\n", b);
+            return AVERROR_INVALIDDATA;
+        }
 
         n1 =  (mul_2x11[b] & 0x0F) - 5;
         n2 = ((mul_2x11[b] >> 4) & 0x0F) - 5;
@@ -418,7 +435,8 @@ static int fill_block(InterplayACMContext *s)
 static void juggle(int *wrap_p, int *block_p, unsigned sub_len, unsigned sub_count)
 {
     unsigned i, j;
-    int *p, r0, r1, r2, r3;
+    int *p;
+    unsigned int r0, r1, r2, r3;
 
     for (i = 0; i < sub_len; i++) {
         p = block_p;
@@ -511,7 +529,7 @@ static int decode_block(InterplayACMContext *s)
 
     for (i = 1, x = -val; i <= count; i++) {
         s->midbuf[-i] = x;
-        x -= val;
+        x -= (unsigned)val;
     }
 
     ret = fill_block(s);
@@ -612,5 +630,6 @@ AVCodec ff_interplay_acm_decoder = {
     .close          = decode_close,
     .decode         = decode_frame,
     .capabilities   = AV_CODEC_CAP_DELAY | AV_CODEC_CAP_DR1,
+    .caps_internal  = FF_CODEC_CAP_INIT_CLEANUP,
     .priv_data_size = sizeof(InterplayACMContext),
 };

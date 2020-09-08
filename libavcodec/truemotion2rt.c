@@ -63,7 +63,8 @@ static int truemotion2rt_decode_header(AVCodecContext *avctx, const AVPacket *av
     uint8_t header_buffer[128] = { 0 };  /* logical maximum header size */
     const uint8_t *buf = avpkt->data;
     int size = avpkt->size;
-    int i;
+    int width, height;
+    int ret, i;
 
     if (size < 1) {
         av_log(avctx, AV_LOG_ERROR, "input packet too small (%d)\n", size);
@@ -90,8 +91,12 @@ static int truemotion2rt_decode_header(AVCodecContext *avctx, const AVPacket *av
     if (s->delta_size < 2 || s->delta_size > 4)
         return AVERROR_INVALIDDATA;
 
-    avctx->height = AV_RL16(header_buffer + 5);
-    avctx->width  = AV_RL16(header_buffer + 7);
+    height = AV_RL16(header_buffer + 5);
+    width  = AV_RL16(header_buffer + 7);
+
+    ret = ff_set_dimensions(avctx, width, height);
+    if (ret < 0)
+        return ret;
 
     av_log(avctx, AV_LOG_DEBUG, "Header size: %d\n", header_size);
     return header_size;
@@ -110,6 +115,9 @@ static int truemotion2rt_decode_frame(AVCodecContext *avctx, void *data,
     ret = truemotion2rt_decode_header(avctx, avpkt);
     if (ret < 0)
         return ret;
+
+    if ((avctx->width + s->hscale - 1)/ s->hscale * avctx->height * s->delta_size > avpkt->size * 8LL * 4)
+        return AVERROR_INVALIDDATA;
 
     ret = init_get_bits8(gb, avpkt->data + ret, avpkt->size - ret);
     if (ret < 0)

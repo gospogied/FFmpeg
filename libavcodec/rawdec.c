@@ -26,6 +26,7 @@
 
 #include "avcodec.h"
 #include "bswapdsp.h"
+#include "decode.h"
 #include "get_bits.h"
 #include "internal.h"
 #include "raw.h"
@@ -92,12 +93,14 @@ static av_cold int raw_init_decoder(AVCodecContext *avctx)
         return AVERROR(EINVAL);
     }
 
-    if (desc->flags & (AV_PIX_FMT_FLAG_PAL | AV_PIX_FMT_FLAG_PSEUDOPAL)) {
+    if (desc->flags & (AV_PIX_FMT_FLAG_PAL | FF_PSEUDOPAL)) {
         context->palette = av_buffer_alloc(AVPALETTE_SIZE);
         if (!context->palette)
             return AVERROR(ENOMEM);
+#if FF_API_PSEUDOPAL
         if (desc->flags & AV_PIX_FMT_FLAG_PSEUDOPAL)
             avpriv_set_systematic_pal2((uint32_t*)context->palette->data, avctx->pix_fmt);
+#endif
         else {
             memset(context->palette->data, 0, AVPALETTE_SIZE);
             if (avctx->bits_per_coded_sample == 1)
@@ -221,7 +224,7 @@ static int raw_decode(AVCodecContext *avctx, void *data, int *got_frame,
                                                            FFALIGN(avctx->width, 16),
                                                            avctx->height, 1);
     } else {
-        context->is_lt_16bpp = av_get_bits_per_pixel(desc) == 16 && avctx->bits_per_coded_sample && avctx->bits_per_coded_sample < 16;
+        context->is_lt_16bpp = av_get_bits_per_pixel(desc) == 16 && avctx->bits_per_coded_sample > 8 && avctx->bits_per_coded_sample < 16;
         context->frame_size = av_image_get_buffer_size(avctx->pix_fmt, avctx->width,
                                                        avctx->height, 1);
     }
@@ -237,8 +240,8 @@ static int raw_decode(AVCodecContext *avctx, void *data, int *got_frame,
     if (res < 0)
         return res;
 
-    av_frame_set_pkt_pos     (frame, avctx->internal->pkt->pos);
-    av_frame_set_pkt_duration(frame, avctx->internal->pkt->duration);
+    frame->pkt_pos      = avctx->internal->last_pkt_props->pos;
+    frame->pkt_duration = avctx->internal->last_pkt_props->duration;
 
     if (context->tff >= 0) {
         frame->interlaced_frame = 1;
@@ -364,9 +367,16 @@ static int raw_decode(AVCodecContext *avctx, void *data, int *got_frame,
     }
 
     if (avctx->pix_fmt == AV_PIX_FMT_PAL8) {
+        int pal_size;
         const uint8_t *pal = av_packet_get_side_data(avpkt, AV_PKT_DATA_PALETTE,
-                                                     NULL);
+                                                     &pal_size);
         int ret;
+
+        if (pal && pal_size != AVPALETTE_SIZE) {
+            av_log(avctx, AV_LOG_ERROR, "Palette size %d is wrong\n", pal_size);
+            pal = NULL;
+        }
+
         if (!context->palette)
             context->palette = av_buffer_alloc(AVPALETTE_SIZE);
         if (!context->palette) {
@@ -416,7 +426,7 @@ static int raw_decode(AVCodecContext *avctx, void *data, int *got_frame,
     }
 
     if ((avctx->pix_fmt == AV_PIX_FMT_PAL8 && buf_size < context->frame_size) ||
-        (desc->flags & AV_PIX_FMT_FLAG_PSEUDOPAL)) {
+        (desc->flags & FF_PSEUDOPAL)) {
         frame->buf[1]  = av_buffer_ref(context->palette);
         if (!frame->buf[1]) {
             av_buffer_unref(&frame->buf[0]);
@@ -458,10 +468,13 @@ static int raw_decode(AVCodecContext *avctx, void *data, int *got_frame,
         avctx->pix_fmt   == AV_PIX_FMT_RGBA64BE) {
         uint8_t *dst = frame->data[0];
         uint64_t v;
-        int x;
-        for (x = 0; x >> 3 < avctx->width * avctx->height; x += 8) {
-            v = AV_RB64(&dst[x]);
-            AV_WB64(&dst[x], v << 16 | v >> 48);
+        int x, y;
+        for (y = 0; y < avctx->height; y++) {
+            for (x = 0; x >> 3 < avctx->width; x += 8) {
+                v = AV_RB64(&dst[x]);
+                AV_WB64(&dst[x], v << 16 | v >> 48);
+            }
+            dst += frame->linesize[0];
         }
     }
 

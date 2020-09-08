@@ -36,6 +36,7 @@
 
 #define MAX_SPS_COUNT          32
 #define MAX_PPS_COUNT         256
+#define MAX_LOG2_MAX_FRAME_NUM    (12 + 4)
 
 /**
  * Sequence parameter set
@@ -56,7 +57,8 @@ typedef struct SPS {
     int ref_frame_count;               ///< num_ref_frames
     int gaps_in_frame_num_allowed_flag;
     int mb_width;                      ///< pic_width_in_mbs_minus1 + 1
-    int mb_height;                     ///< pic_height_in_map_units_minus1 + 1
+    ///< (pic_height_in_map_units_minus1 + 1) * (2 - frame_mbs_only_flag)
+    int mb_height;
     int frame_mbs_only_flag;
     int mb_aff;                        ///< mb_adaptive_frame_field_flag
     int direct_8x8_inference_flag;
@@ -75,11 +77,13 @@ typedef struct SPS {
     enum AVColorPrimaries color_primaries;
     enum AVColorTransferCharacteristic color_trc;
     enum AVColorSpace colorspace;
+    enum AVChromaLocation chroma_location;
+
     int timing_info_present_flag;
     uint32_t num_units_in_tick;
     uint32_t time_scale;
     int fixed_frame_rate_flag;
-    short offset_for_ref_frame[256]; // FIXME dyn aloc?
+    int32_t offset_for_ref_frame[256];
     int bitstream_restriction_flag;
     int num_reorder_frames;
     int scaling_matrix_present;
@@ -131,6 +135,9 @@ typedef struct PPS {
     uint32_t dequant8_buffer[6][QP_MAX_NUM + 1][64];
     uint32_t(*dequant4_coeff[6])[16];
     uint32_t(*dequant8_coeff[6])[64];
+
+    AVBufferRef *sps_ref;
+    const SPS   *sps;
 } PPS;
 
 typedef struct H264ParamSets {
@@ -138,10 +145,11 @@ typedef struct H264ParamSets {
     AVBufferRef *pps_list[MAX_PPS_COUNT];
 
     AVBufferRef *pps_ref;
-    AVBufferRef *sps_ref;
     /* currently active parameters sets */
     const PPS *pps;
     const SPS *sps;
+
+    int overread_warning_printed[2];
 } H264ParamSets;
 
 /**

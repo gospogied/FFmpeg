@@ -171,12 +171,10 @@ av_cold struct FFIIRFilterCoeffs *ff_iir_filter_init_coeffs(void *avc,
     if (order <= 0 || order > MAXORDER || cutoff_ratio >= 1.0)
         return NULL;
 
-    FF_ALLOCZ_OR_GOTO(avc, c, sizeof(FFIIRFilterCoeffs),
-                      init_fail);
-    FF_ALLOC_OR_GOTO(avc, c->cx, sizeof(c->cx[0]) * ((order >> 1) + 1),
-                     init_fail);
-    FF_ALLOC_OR_GOTO(avc, c->cy, sizeof(c->cy[0]) * order,
-                     init_fail);
+    if (!(c     = av_mallocz(sizeof(*c)))                            ||
+        !(c->cx = av_malloc (sizeof(c->cx[0]) * ((order >> 1) + 1))) ||
+        !(c->cy = av_malloc (sizeof(c->cy[0]) * order)))
+        goto free;
     c->order = order;
 
     switch (filt_type) {
@@ -190,13 +188,12 @@ av_cold struct FFIIRFilterCoeffs *ff_iir_filter_init_coeffs(void *avc,
         break;
     default:
         av_log(avc, AV_LOG_ERROR, "filter type is not currently implemented\n");
-        goto init_fail;
+        goto free;
     }
 
     if (!ret)
         return c;
-
-init_fail:
+free:
     ff_iir_filter_free_coeffsp(&c);
     return NULL;
 }
@@ -278,7 +275,8 @@ av_cold struct FFIIRFilterState *ff_iir_filter_init_state(int order)
 
 void ff_iir_filter(const struct FFIIRFilterCoeffs *c,
                    struct FFIIRFilterState *s, int size,
-                   const int16_t *src, int sstep, int16_t *dst, int dstep)
+                   const int16_t *src, ptrdiff_t sstep,
+                   int16_t *dst, ptrdiff_t dstep)
 {
     if (c->order == 2) {
         FILTER_O2(int16_t, S16)
@@ -291,7 +289,8 @@ void ff_iir_filter(const struct FFIIRFilterCoeffs *c,
 
 void ff_iir_filter_flt(const struct FFIIRFilterCoeffs *c,
                        struct FFIIRFilterState *s, int size,
-                       const float *src, int sstep, float *dst, int dstep)
+                       const float *src, ptrdiff_t sstep,
+                       float *dst, ptrdiff_t dstep)
 {
     if (c->order == 2) {
         FILTER_O2(float, FLT)

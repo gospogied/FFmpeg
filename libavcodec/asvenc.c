@@ -61,7 +61,7 @@ static inline void asv2_put_level(ASV1Context *a, PutBitContext *pb, int level)
     } else {
         put_bits(pb, ff_asv2_level_tab[31][1], ff_asv2_level_tab[31][0]);
         if (level < -128 || level > 127) {
-            av_log(a->avctx, AV_LOG_WARNING, "Cliping level %d, increase qscale\n", level);
+            av_log(a->avctx, AV_LOG_WARNING, "Clipping level %d, increase qscale\n", level);
             level = av_clip_int8(level);
         }
         asv2_put_bits(pb, 8, level & 0xFF);
@@ -173,10 +173,7 @@ static inline int encode_mb(ASV1Context *a, int16_t block[6][64])
 {
     int i;
 
-    if (a->pb.buf_end - a->pb.buf - (put_bits_count(&a->pb) >> 3) < MAX_MB_SIZE) {
-        av_log(a->avctx, AV_LOG_ERROR, "encoded frame too large\n");
-        return -1;
-    }
+    av_assert0(a->pb.buf_end - a->pb.buf - (put_bits_count(&a->pb) >> 3) >= MAX_MB_SIZE);
 
     if (a->avctx->codec_id == AV_CODEC_ID_ASV1) {
         for (i = 0; i < 6; i++)
@@ -231,7 +228,7 @@ static int encode_frame(AVCodecContext *avctx, AVPacket *pkt,
         clone->format = pict->format;
         clone->width  = FFALIGN(pict->width, 16);
         clone->height = FFALIGN(pict->height, 16);
-        ret = av_frame_get_buffer(clone, 32);
+        ret = av_frame_get_buffer(clone, 0);
         if (ret < 0) {
             av_frame_free(&clone);
             return ret;
@@ -298,6 +295,7 @@ static int encode_frame(AVCodecContext *avctx, AVPacket *pkt,
     while (put_bits_count(&a->pb) & 31)
         put_bits(&a->pb, 8, 0);
 
+    flush_put_bits(&a->pb);
     size = put_bits_count(&a->pb) / 32;
 
     if (avctx->codec_id == AV_CODEC_ID_ASV1) {

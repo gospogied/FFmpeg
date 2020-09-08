@@ -44,7 +44,6 @@ typedef struct APNGDemuxContext {
     int max_fps;
     int default_fps;
 
-    int64_t pkt_pts;
     int pkt_duration;
 
     int is_key_frame;
@@ -67,7 +66,7 @@ typedef struct APNGDemuxContext {
  *     ...
  *     IDAT
  */
-static int apng_probe(AVProbeData *p)
+static int apng_probe(const AVProbeData *p)
 {
     GetByteContext gb;
     int state = 0;
@@ -128,13 +127,14 @@ static int append_extradata(AVCodecParameters *par, AVIOContext *pb, int len)
     int new_size, ret;
     uint8_t *new_extradata;
 
-    if (previous_size > INT_MAX - len)
+    if (previous_size > INT_MAX - AV_INPUT_BUFFER_PADDING_SIZE - len)
         return AVERROR_INVALIDDATA;
 
     new_size = previous_size + len;
     new_extradata = av_realloc(par->extradata, new_size + AV_INPUT_BUFFER_PADDING_SIZE);
     if (!new_extradata)
         return AVERROR(ENOMEM);
+    memset(new_extradata + new_size, 0, AV_INPUT_BUFFER_PADDING_SIZE);
     par->extradata = new_extradata;
     par->extradata_size = new_size;
 
@@ -178,10 +178,9 @@ static int apng_read_header(AVFormatContext *s)
         return ret;
 
     /* extradata will contain every chunk up to the first fcTL (excluded) */
-    st->codecpar->extradata = av_malloc(len + 12 + AV_INPUT_BUFFER_PADDING_SIZE);
-    if (!st->codecpar->extradata)
-        return AVERROR(ENOMEM);
-    st->codecpar->extradata_size = len + 12;
+    ret = ff_alloc_extradata(st->codecpar, len + 12);
+    if (ret < 0)
+        return ret;
     AV_WB32(st->codecpar->extradata,    len);
     AV_WL32(st->codecpar->extradata+4,  tag);
     AV_WB32(st->codecpar->extradata+8,  st->codecpar->width);
@@ -242,10 +241,6 @@ static int apng_read_header(AVFormatContext *s)
     }
 
 fail:
-    if (st->codecpar->extradata_size) {
-        av_freep(&st->codecpar->extradata);
-        st->codecpar->extradata_size = 0;
-    }
     return ret;
 }
 
@@ -269,7 +264,7 @@ static int decode_fctl_chunk(AVFormatContext *s, APNGDemuxContext *ctx, AVPacket
     /* default is hundredths of seconds */
     if (!delay_den)
         delay_den = 100;
-    if (!delay_num || delay_den / delay_num > ctx->max_fps) {
+    if (!delay_num || (ctx->max_fps && delay_den / delay_num > ctx->max_fps)) {
         delay_num = 1;
         delay_den = ctx->default_fps;
     }
@@ -343,6 +338,10 @@ static int apng_read_packet(AVFormatContext *s, AVPacket *pkt)
 
     len = avio_rb32(pb);
     tag = avio_rl32(pb);
+
+    if (avio_feof(pb))
+        return AVERROR_EOF;
+
     switch (tag) {
     case MKTAG('f', 'c', 'T', 'L'):
         if (len != 26)
@@ -390,9 +389,8 @@ static int apng_read_packet(AVFormatContext *s, AVPacket *pkt)
 
         if (ctx->is_key_frame)
             pkt->flags |= AV_PKT_FLAG_KEY;
-        pkt->pts = ctx->pkt_pts;
+        pkt->pts = pkt->dts = AV_NOPTS_VALUE;
         pkt->duration = ctx->pkt_duration;
-        ctx->pkt_pts += ctx->pkt_duration;
         return ret;
     case MKTAG('I', 'E', 'N', 'D'):
         ctx->cur_loop++;
@@ -404,13 +402,9 @@ static int apng_read_packet(AVFormatContext *s, AVPacket *pkt)
             return ret;
         return 0;
     default:
-        {
-        char tag_buf[32];
-
-        av_get_codec_tag_string(tag_buf, sizeof(tag_buf), tag);
-        avpriv_request_sample(s, "In-stream tag=%s (0x%08X) len=%"PRIu32, tag_buf, tag, len);
+        avpriv_request_sample(s, "In-stream tag=%s (0x%08"PRIX32") len=%"PRIu32,
+                              av_fourcc2str(tag), tag, len);
         avio_skip(pb, len + 4);
-        }
     }
 
     /* Handle the unsupported yet cases */
@@ -421,7 +415,7 @@ static const AVOption options[] = {
     { "ignore_loop", "ignore loop setting"                         , offsetof(APNGDemuxContext, ignore_loop),
       AV_OPT_TYPE_BOOL, { .i64 = 1 }              , 0, 1      , AV_OPT_FLAG_DECODING_PARAM },
     { "max_fps"    , "maximum framerate (0 is no limit)"           , offsetof(APNGDemuxContext, max_fps),
-      AV_OPT_TYPE_INT, { .i64 = DEFAULT_APNG_FPS }, 0, INT_MAX, AV_OPT_FLAG_DECODING_PARAM },
+      AV_OPT_TYPE_INT, { .i64 = 0 }, 0, INT_MAX, AV_OPT_FLAG_DECODING_PARAM },
     { "default_fps", "default framerate (0 is as fast as possible)", offsetof(APNGDemuxContext, default_fps),
       AV_OPT_TYPE_INT, { .i64 = DEFAULT_APNG_FPS }, 0, INT_MAX, AV_OPT_FLAG_DECODING_PARAM },
     { NULL },

@@ -37,7 +37,11 @@
 #include "libavutil/imgutils.h"
 #include "libavutil/internal.h"
 #include "libavutil/timestamp.h"
+
+#include "libavcodec/avcodec.h"
+
 #include "libavformat/avformat.h"
+
 #include "audio.h"
 #include "avfilter.h"
 #include "formats.h"
@@ -85,8 +89,8 @@ static const AVOption movie_options[]= {
     { "si",           "set stream index",        OFFSET(stream_index), AV_OPT_TYPE_INT,    { .i64 = -1 }, -1, INT_MAX,                 FLAGS  },
     { "seek_point",   "set seekpoint (seconds)", OFFSET(seek_point_d), AV_OPT_TYPE_DOUBLE, { .dbl =  0 },  0, (INT64_MAX-1) / 1000000, FLAGS },
     { "sp",           "set seekpoint (seconds)", OFFSET(seek_point_d), AV_OPT_TYPE_DOUBLE, { .dbl =  0 },  0, (INT64_MAX-1) / 1000000, FLAGS },
-    { "streams",      "set streams",             OFFSET(stream_specs), AV_OPT_TYPE_STRING, {.str =  0},  CHAR_MAX, CHAR_MAX, FLAGS },
-    { "s",            "set streams",             OFFSET(stream_specs), AV_OPT_TYPE_STRING, {.str =  0},  CHAR_MAX, CHAR_MAX, FLAGS },
+    { "streams",      "set streams",             OFFSET(stream_specs), AV_OPT_TYPE_STRING, {.str =  0},  0, 0, FLAGS },
+    { "s",            "set streams",             OFFSET(stream_specs), AV_OPT_TYPE_STRING, {.str =  0},  0, 0, FLAGS },
     { "loop",         "set loop count",          OFFSET(loop_count),   AV_OPT_TYPE_INT,    {.i64 =  1},  0,        INT_MAX, FLAGS },
     { "discontinuity", "set discontinuity threshold", OFFSET(discontinuity_threshold), AV_OPT_TYPE_DURATION, {.i64 = 0}, 0, INT64_MAX, FLAGS },
     { NULL },
@@ -149,14 +153,14 @@ static AVStream *find_stream(void *log, AVFormatContext *avf, const char *spec)
     return found;
 }
 
-static int open_stream(void *log, MovieStream *st)
+static int open_stream(AVFilterContext *ctx, MovieStream *st)
 {
     AVCodec *codec;
     int ret;
 
     codec = avcodec_find_decoder(st->st->codecpar->codec_id);
     if (!codec) {
-        av_log(log, AV_LOG_ERROR, "Failed to find any codec\n");
+        av_log(ctx, AV_LOG_ERROR, "Failed to find any codec\n");
         return AVERROR(EINVAL);
     }
 
@@ -169,9 +173,10 @@ static int open_stream(void *log, MovieStream *st)
         return ret;
 
     st->codec_ctx->refcounted_frames = 1;
+    st->codec_ctx->thread_count = ff_filter_get_nb_threads(ctx);
 
     if ((ret = avcodec_open2(st->codec_ctx, codec, NULL)) < 0) {
-        av_log(log, AV_LOG_ERROR, "Failed to open codec\n");
+        av_log(ctx, AV_LOG_ERROR, "Failed to open codec\n");
         return ret;
     }
 
@@ -208,7 +213,6 @@ static av_cold int movie_common_init(AVFilterContext *ctx)
     int64_t timestamp;
     int nb_streams = 1, ret, i;
     char default_streams[16], *stream_specs, *spec, *cursor;
-    char name[16];
     AVStream *st;
 
     if (!movie->file_name) {
@@ -234,8 +238,6 @@ static av_cold int movie_common_init(AVFilterContext *ctx)
                "Loop with several streams is currently unsupported\n");
         return AVERROR_PATCHWELCOME;
     }
-
-    av_register_all();
 
     // Try to find the movie format (container)
     iformat = movie->format_name ? av_find_input_format(movie->format_name) : NULL;
@@ -302,14 +304,16 @@ static av_cold int movie_common_init(AVFilterContext *ctx)
     for (i = 0; i < nb_streams; i++) {
         AVFilterPad pad = { 0 };
         movie->out_index[movie->st[i].st->index] = i;
-        snprintf(name, sizeof(name), "out%d", i);
         pad.type          = movie->st[i].st->codecpar->codec_type;
-        pad.name          = av_strdup(name);
+        pad.name          = av_asprintf("out%d", i);
         if (!pad.name)
             return AVERROR(ENOMEM);
         pad.config_props  = movie_config_output_props;
         pad.request_frame = movie_request_frame;
-        ff_insert_outpad(ctx, i, &pad);
+        if ((ret = ff_insert_outpad(ctx, i, &pad)) < 0) {
+            av_freep(&pad.name);
+            return ret;
+        }
         if ( movie->st[i].st->codecpar->codec_type == AVMEDIA_TYPE_AUDIO &&
             !movie->st[i].st->codecpar->channel_layout) {
             ret = guess_channel_layout(&movie->st[i], i, ctx);
@@ -359,19 +363,19 @@ static int movie_query_formats(AVFilterContext *ctx)
         switch (c->codec_type) {
         case AVMEDIA_TYPE_VIDEO:
             list[0] = c->format;
-            if ((ret = ff_formats_ref(ff_make_format_list(list), &outlink->in_formats)) < 0)
+            if ((ret = ff_formats_ref(ff_make_format_list(list), &outlink->incfg.formats)) < 0)
                 return ret;
             break;
         case AVMEDIA_TYPE_AUDIO:
             list[0] = c->format;
-            if ((ret = ff_formats_ref(ff_make_format_list(list), &outlink->in_formats)) < 0)
+            if ((ret = ff_formats_ref(ff_make_format_list(list), &outlink->incfg.formats)) < 0)
                 return ret;
             list[0] = c->sample_rate;
-            if ((ret = ff_formats_ref(ff_make_format_list(list), &outlink->in_samplerates)) < 0)
+            if ((ret = ff_formats_ref(ff_make_format_list(list), &outlink->incfg.samplerates)) < 0)
                 return ret;
             list64[0] = c->channel_layout;
-            if ((ret = ff_channel_layouts_ref(avfilter_make_format64_list(list64),
-                                   &outlink->in_channel_layouts)) < 0)
+            if ((ret = ff_channel_layouts_ref(ff_make_format64_list(list64),
+                                   &outlink->incfg.channel_layouts)) < 0)
                 return ret;
             break;
         }
@@ -555,7 +559,7 @@ static int movie_push_frame(AVFilterContext *ctx, unsigned out_id)
         return 0;
     }
 
-    frame->pts = av_frame_get_best_effort_timestamp(frame);
+    frame->pts = frame->best_effort_timestamp;
     if (frame->pts != AV_NOPTS_VALUE) {
         if (movie->ts_offset)
             frame->pts += av_rescale_q_rnd(movie->ts_offset, AV_TIME_BASE_Q, outlink->time_base, AV_ROUND_UP);

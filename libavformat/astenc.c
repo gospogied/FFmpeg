@@ -101,8 +101,6 @@ static int ast_write_header(AVFormatContext *s)
     avio_wb64(pb, 0);
     avio_wb32(pb, 0);
 
-    avio_flush(pb);
-
     return 0;
 }
 
@@ -139,7 +137,7 @@ static int ast_write_trailer(AVFormatContext *s)
 
     av_log(s, AV_LOG_DEBUG, "total samples: %"PRId64"\n", samples);
 
-    if (s->pb->seekable) {
+    if (s->pb->seekable & AVIO_SEEKABLE_NORMAL) {
         /* Number of samples */
         avio_seek(pb, ast->samples, SEEK_SET);
         avio_wb32(pb, samples);
@@ -180,7 +178,6 @@ static int ast_write_trailer(AVFormatContext *s)
         }
 
         avio_seek(pb, file_size, SEEK_SET);
-        avio_flush(pb);
     }
     return 0;
 }

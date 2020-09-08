@@ -62,6 +62,11 @@ static const struct channel_name channel_names[] = {
     [33] = { "SDL",       "surround direct left"  },
     [34] = { "SDR",       "surround direct right" },
     [35] = { "LFE2",      "low frequency 2"       },
+    [36] = { "TSL",       "top side left"         },
+    [37] = { "TSR",       "top side right"        },
+    [38] = { "BFC",       "bottom front center"   },
+    [39] = { "BFL",       "bottom front left"     },
+    [40] = { "BFR",       "bottom front right"    },
 };
 
 static const char *get_channel_name(int channel_id)
@@ -104,6 +109,7 @@ static const struct {
     { "octagonal",   8,  AV_CH_LAYOUT_OCTAGONAL },
     { "hexadecagonal", 16, AV_CH_LAYOUT_HEXADECAGONAL },
     { "downmix",     2,  AV_CH_LAYOUT_STEREO_DOWNMIX, },
+    { "22.2",          24, AV_CH_LAYOUT_22POINT2, },
 };
 
 static uint64_t get_channel_layout_single(const char *name, int name_len)
@@ -150,6 +156,28 @@ uint64_t av_get_channel_layout(const char *name)
         layout |= layout_single;
     }
     return layout;
+}
+
+int av_get_extended_channel_layout(const char *name, uint64_t* channel_layout, int* nb_channels)
+{
+    int nb = 0;
+    char *end;
+    uint64_t layout = av_get_channel_layout(name);
+
+    if (layout) {
+        *channel_layout = layout;
+        *nb_channels = av_get_channel_layout_nb_channels(layout);
+        return 0;
+    }
+
+    nb = strtol(name, &end, 10);
+    if (!errno && *end  == 'C' && *(end + 1) == '\0' && nb > 0 && nb < 64) {
+        *channel_layout = 0;
+        *nb_channels = nb;
+        return 0;
+    }
+
+    return AVERROR(EINVAL);
 }
 
 void av_bprint_channel_layout(struct AVBPrint *bp,

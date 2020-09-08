@@ -176,7 +176,7 @@ static int rtmp_http_close(URLContext *h)
     }
 
     av_freep(&rt->out_data);
-    ffurl_close(rt->stream);
+    ffurl_closep(&rt->stream);
 
     return ret;
 }
@@ -208,7 +208,7 @@ static int rtmp_http_open(URLContext *h, const char *uri, int flags)
     }
 
     /* alloc the http context */
-    if ((ret = ffurl_alloc(&rt->stream, url, AVIO_FLAG_READ_WRITE, NULL)) < 0)
+    if ((ret = ffurl_alloc(&rt->stream, url, AVIO_FLAG_READ_WRITE, &h->interrupt_callback)) < 0)
         goto fail;
 
     /* set options */

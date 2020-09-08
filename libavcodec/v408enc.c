@@ -26,6 +26,8 @@
 
 static av_cold int v408_encode_init(AVCodecContext *avctx)
 {
+    avctx->bits_per_coded_sample = 32;
+    avctx->bit_rate = ff_guess_coded_bitrate(avctx);
 
     return 0;
 }
@@ -86,7 +88,6 @@ AVCodec ff_ayuv_encoder = {
     .encode2      = v408_encode_frame,
     .close        = v408_encode_close,
     .pix_fmts     = (const enum AVPixelFormat[]){ AV_PIX_FMT_YUVA444P, AV_PIX_FMT_NONE },
-    .capabilities = AV_CODEC_CAP_INTRA_ONLY,
 };
 #endif
 #if CONFIG_V408_ENCODER
@@ -99,6 +100,5 @@ AVCodec ff_v408_encoder = {
     .encode2      = v408_encode_frame,
     .close        = v408_encode_close,
     .pix_fmts     = (const enum AVPixelFormat[]){ AV_PIX_FMT_YUVA444P, AV_PIX_FMT_NONE },
-    .capabilities = AV_CODEC_CAP_INTRA_ONLY,
 };
 #endif

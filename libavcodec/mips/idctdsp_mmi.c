@@ -23,73 +23,60 @@
 
 #include "idctdsp_mips.h"
 #include "constants.h"
-#include "libavutil/mips/asmdefs.h"
+#include "libavutil/mips/mmiutils.h"
 
 void ff_put_pixels_clamped_mmi(const int16_t *block,
         uint8_t *av_restrict pixels, ptrdiff_t line_size)
 {
     double ftmp[8];
-    mips_reg addr[1];
 
     __asm__ volatile (
-        "ldc1       %[ftmp0],   0x00(%[block])                          \n\t"
-        "ldc1       %[ftmp1],   0x08(%[block])                          \n\t"
-        "ldc1       %[ftmp2],   0x10(%[block])                          \n\t"
-        "ldc1       %[ftmp3],   0x18(%[block])                          \n\t"
-        "ldc1       %[ftmp4],   0x20(%[block])                          \n\t"
-        "ldc1       %[ftmp5],   0x28(%[block])                          \n\t"
-        "ldc1       %[ftmp6],   0x30(%[block])                          \n\t"
-        "ldc1       %[ftmp7],   0x38(%[block])                          \n\t"
-        PTR_ADDU   "%[addr0],   %[pixels],      %[line_size]            \n\t"
+        MMI_LDC1(%[ftmp0], %[block], 0x00)
+        MMI_LDC1(%[ftmp1], %[block], 0x08)
+        MMI_LDC1(%[ftmp2], %[block], 0x10)
+        MMI_LDC1(%[ftmp3], %[block], 0x18)
+        MMI_LDC1(%[ftmp4], %[block], 0x20)
+        MMI_LDC1(%[ftmp5], %[block], 0x28)
+        MMI_LDC1(%[ftmp6], %[block], 0x30)
+        MMI_LDC1(%[ftmp7], %[block], 0x38)
         "packushb   %[ftmp0],   %[ftmp0],       %[ftmp1]                \n\t"
         "packushb   %[ftmp2],   %[ftmp2],       %[ftmp3]                \n\t"
         "packushb   %[ftmp4],   %[ftmp4],       %[ftmp5]                \n\t"
         "packushb   %[ftmp6],   %[ftmp6],       %[ftmp7]                \n\t"
-        "sdc1       %[ftmp0],   0x00(%[pixels])                         \n\t"
-        "sdc1       %[ftmp2],   0x00(%[addr0])                          \n\t"
-        "gssdxc1    %[ftmp4],   0x00(%[addr0],  %[line_size])           \n\t"
-        "gssdxc1    %[ftmp6],   0x00(%[pixels], %[line_sizex3])         \n\t"
-        : [ftmp0]"=&f"(ftmp[0]),            [ftmp1]"=&f"(ftmp[1]),
-          [ftmp2]"=&f"(ftmp[2]),            [ftmp3]"=&f"(ftmp[3]),
-          [ftmp4]"=&f"(ftmp[4]),            [ftmp5]"=&f"(ftmp[5]),
-          [ftmp6]"=&f"(ftmp[6]),            [ftmp7]"=&f"(ftmp[7]),
-          [addr0]"=&r"(addr[0]),
-          [pixels]"+&r"(pixels)
-        : [line_size]"r"((mips_reg)line_size),
-          [line_sizex3]"r"((mips_reg)(line_size*3)),
-          [block]"r"(block)
-        : "memory"
-    );
+        MMI_SDC1(%[ftmp0], %[pixels], 0x00)
+        PTR_ADDU   "%[pixels],  %[pixels],      %[line_size]            \n\t"
+        MMI_SDC1(%[ftmp2], %[pixels], 0x00)
+        PTR_ADDU   "%[pixels],  %[pixels],      %[line_size]            \n\t"
+        MMI_SDC1(%[ftmp4], %[pixels], 0x00)
+        PTR_ADDU   "%[pixels],  %[pixels],      %[line_size]            \n\t"
+        MMI_SDC1(%[ftmp6], %[pixels], 0x00)
+        PTR_ADDU   "%[pixels],  %[pixels],      %[line_size]            \n\t"
 
-    pixels += line_size*4;
-    block += 32;
-
-    __asm__ volatile (
-        "ldc1       %[ftmp0],   0x00(%[block])                          \n\t"
-        "ldc1       %[ftmp1],   0x08(%[block])                          \n\t"
-        "ldc1       %[ftmp2],   0x10(%[block])                          \n\t"
-        "ldc1       %[ftmp3],   0x18(%[block])                          \n\t"
-        "ldc1       %[ftmp4],   0x20(%[block])                          \n\t"
-        "ldc1       %[ftmp5],   0x28(%[block])                          \n\t"
-        "ldc1       %[ftmp6],   0x30(%[block])                          \n\t"
-        "ldc1       %[ftmp7],   0x38(%[block])                          \n\t"
-        PTR_ADDU   "%[addr0],   %[pixels],      %[line_size]            \n\t"
+        MMI_LDC1(%[ftmp0], %[block], 0x40)
+        MMI_LDC1(%[ftmp1], %[block], 0x48)
+        MMI_LDC1(%[ftmp2], %[block], 0x50)
+        MMI_LDC1(%[ftmp3], %[block], 0x58)
+        MMI_LDC1(%[ftmp4], %[block], 0x60)
+        MMI_LDC1(%[ftmp5], %[block], 0x68)
+        MMI_LDC1(%[ftmp6], %[block], 0x70)
+        MMI_LDC1(%[ftmp7], %[block], 0x78)
         "packushb   %[ftmp0],   %[ftmp0],       %[ftmp1]                \n\t"
         "packushb   %[ftmp2],   %[ftmp2],       %[ftmp3]                \n\t"
         "packushb   %[ftmp4],   %[ftmp4],       %[ftmp5]                \n\t"
         "packushb   %[ftmp6],   %[ftmp6],       %[ftmp7]                \n\t"
-        "sdc1       %[ftmp0],   0x00(%[pixels])                         \n\t"
-        "sdc1       %[ftmp2],   0x00(%[addr0])                          \n\t"
-        "gssdxc1    %[ftmp4],   0x00(%[addr0],  %[line_size])           \n\t"
-        "gssdxc1    %[ftmp6],   0x00(%[pixels], %[line_sizex3])         \n\t"
+        MMI_SDC1(%[ftmp0], %[pixels], 0x00)
+        PTR_ADDU   "%[pixels],  %[pixels],      %[line_size]            \n\t"
+        MMI_SDC1(%[ftmp2], %[pixels], 0x00)
+        PTR_ADDU   "%[pixels],  %[pixels],      %[line_size]            \n\t"
+        MMI_SDC1(%[ftmp4], %[pixels], 0x00)
+        PTR_ADDU   "%[pixels],  %[pixels],      %[line_size]            \n\t"
+        MMI_SDC1(%[ftmp6], %[pixels], 0x00)
         : [ftmp0]"=&f"(ftmp[0]),            [ftmp1]"=&f"(ftmp[1]),
           [ftmp2]"=&f"(ftmp[2]),            [ftmp3]"=&f"(ftmp[3]),
           [ftmp4]"=&f"(ftmp[4]),            [ftmp5]"=&f"(ftmp[5]),
           [ftmp6]"=&f"(ftmp[6]),            [ftmp7]"=&f"(ftmp[7]),
-          [addr0]"=&r"(addr[0]),
           [pixels]"+&r"(pixels)
         : [line_size]"r"((mips_reg)line_size),
-          [line_sizex3]"r"((mips_reg)(line_size*3)),
           [block]"r"(block)
         : "memory"
     );
@@ -98,64 +85,63 @@ void ff_put_pixels_clamped_mmi(const int16_t *block,
 void ff_put_signed_pixels_clamped_mmi(const int16_t *block,
     uint8_t *av_restrict pixels, ptrdiff_t line_size)
 {
-    int64_t line_skip = line_size;
-    int64_t line_skip3 = 0;
     double ftmp[5];
-    mips_reg addr[1];
 
     __asm__ volatile (
-        PTR_ADDU   "%[line_skip3],  %[line_skip],   %[line_skip]        \n\t"
-        "ldc1       %[ftmp1],       0x00(%[block])                      \n\t"
-        "ldc1       %[ftmp0],       0x08(%[block])                      \n\t"
+        MMI_LDC1(%[ftmp1], %[block], 0x00)
+        MMI_LDC1(%[ftmp0], %[block], 0x08)
         "packsshb   %[ftmp1],       %[ftmp1],       %[ftmp0]            \n\t"
-        "ldc1       %[ftmp2],       0x10(%[block])                      \n\t"
-        "ldc1       %[ftmp0],       0x18(%[block])                      \n\t"
+        MMI_LDC1(%[ftmp2], %[block], 0x10)
+        MMI_LDC1(%[ftmp0], %[block], 0x18)
         "packsshb   %[ftmp2],       %[ftmp2],       %[ftmp0]            \n\t"
-        "ldc1       %[ftmp3],       0x20(%[block])                      \n\t"
-        "ldc1       %[ftmp0],       0x28(%[block])                      \n\t"
+        MMI_LDC1(%[ftmp3], %[block], 0x20)
+        MMI_LDC1(%[ftmp0], %[block], 0x28)
         "packsshb   %[ftmp3],       %[ftmp3],       %[ftmp0]            \n\t"
-        "ldc1       %[ftmp4],       48(%[block])                        \n\t"
-        "ldc1       %[ftmp0],       56(%[block])                        \n\t"
+        MMI_LDC1(%[ftmp4], %[block], 0x30)
+        MMI_LDC1(%[ftmp0], %[block], 0x38)
         "packsshb   %[ftmp4],       %[ftmp4],       %[ftmp0]            \n\t"
         "paddb      %[ftmp1],       %[ftmp1],       %[ff_pb_80]         \n\t"
         "paddb      %[ftmp2],       %[ftmp2],       %[ff_pb_80]         \n\t"
         "paddb      %[ftmp3],       %[ftmp3],       %[ff_pb_80]         \n\t"
         "paddb      %[ftmp4],       %[ftmp4],       %[ff_pb_80]         \n\t"
-        "sdc1       %[ftmp1],       0x00(%[pixels])                     \n\t"
-        "gssdxc1    %[ftmp2],       0x00(%[pixels], %[line_skip])       \n\t"
-        "gssdxc1    %[ftmp3],       0x00(%[pixels], %[line_skip3])      \n\t"
-        PTR_ADDU   "%[line_skip3],  %[line_skip3],  %[line_skip]        \n\t"
-        "gssdxc1    %[ftmp4],       0x00(%[pixels], %[line_skip3])      \n\t"
-        PTR_ADDU   "%[addr0],       %[line_skip3],  %[line_skip]        \n\t"
-        PTR_ADDU   "%[pixels],      %[pixels],      %[addr0]            \n\t"
-        "ldc1       %[ftmp1],       0x40(%[block])                      \n\t"
-        "ldc1       %[ftmp0],       0x48(%[block])                      \n\t"
+        MMI_SDC1(%[ftmp1], %[pixels], 0x00)
+        PTR_ADDU   "%[pixels],      %[pixels],      %[line_size]        \n\t"
+        MMI_SDC1(%[ftmp2], %[pixels], 0x00)
+        PTR_ADDU   "%[pixels],      %[pixels],      %[line_size]        \n\t"
+        MMI_SDC1(%[ftmp3], %[pixels], 0x00)
+        PTR_ADDU   "%[pixels],      %[pixels],      %[line_size]        \n\t"
+        MMI_SDC1(%[ftmp4], %[pixels], 0x00)
+        PTR_ADDU   "%[pixels],      %[pixels],      %[line_size]        \n\t"
+
+        MMI_LDC1(%[ftmp1], %[block], 0x40)
+        MMI_LDC1(%[ftmp0], %[block], 0x48)
         "packsshb   %[ftmp1],       %[ftmp1],       %[ftmp0]            \n\t"
-        "ldc1       %[ftmp2],       0x50(%[block])                      \n\t"
-        "ldc1       %[ftmp0],       0x58(%[block])                      \n\t"
+        MMI_LDC1(%[ftmp2], %[block], 0x50)
+        MMI_LDC1(%[ftmp0], %[block], 0x58)
         "packsshb   %[ftmp2],       %[ftmp2],       %[ftmp0]            \n\t"
-        "ldc1       %[ftmp3],       0x60(%[block])                      \n\t"
-        "ldc1       %[ftmp0],       0x68(%[block])                      \n\t"
+        MMI_LDC1(%[ftmp3], %[block], 0x60)
+        MMI_LDC1(%[ftmp0], %[block], 0x68)
         "packsshb   %[ftmp3],       %[ftmp3],       %[ftmp0]            \n\t"
-        "ldc1       %[ftmp4],       0x70(%[block])                      \n\t"
-        "ldc1       %[ftmp0],       0x78(%[block])                      \n\t"
+        MMI_LDC1(%[ftmp4], %[block], 0x70)
+        MMI_LDC1(%[ftmp0], %[block], 0x78)
         "packsshb   %[ftmp4],       %[ftmp4],       %[ftmp0]            \n\t"
         "paddb      %[ftmp1],       %[ftmp1],       %[ff_pb_80]         \n\t"
         "paddb      %[ftmp2],       %[ftmp2],       %[ff_pb_80]         \n\t"
         "paddb      %[ftmp3],       %[ftmp3],       %[ff_pb_80]         \n\t"
         "paddb      %[ftmp4],       %[ftmp4],       %[ff_pb_80]         \n\t"
-        "sdc1       %[ftmp1],       0x00(%[pixels])                     \n\t"
-        "gssdxc1    %[ftmp2],       0x00(%[pixels], %[line_skip])       \n\t"
-        PTR_ADDU   "%[addr0],       %[line_skip],   %[line_skip]        \n\t"
-        "gssdxc1    %[ftmp3],       0x00(%[pixels], %[addr0])           \n\t"
-        "gssdxc1    %[ftmp4],       0x00(%[pixels], %[line_skip3])      \n\t"
+        MMI_SDC1(%[ftmp1], %[pixels], 0x00)
+        PTR_ADDU   "%[pixels],      %[pixels],      %[line_size]        \n\t"
+        MMI_SDC1(%[ftmp2], %[pixels], 0x00)
+        PTR_ADDU   "%[pixels],      %[pixels],      %[line_size]        \n\t"
+        MMI_SDC1(%[ftmp3], %[pixels], 0x00)
+        PTR_ADDU   "%[pixels],      %[pixels],      %[line_size]        \n\t"
+        MMI_SDC1(%[ftmp4], %[pixels], 0x00)
         : [ftmp0]"=&f"(ftmp[0]),            [ftmp1]"=&f"(ftmp[1]),
           [ftmp2]"=&f"(ftmp[2]),            [ftmp3]"=&f"(ftmp[3]),
           [ftmp4]"=&f"(ftmp[4]),
-          [addr0]"=&r"(addr[0]),
-          [pixels]"+&r"(pixels),            [line_skip3]"+&r"(line_skip3)
+          [pixels]"+&r"(pixels)
         : [block]"r"(block),
-          [line_skip]"r"((mips_reg)line_skip),
+          [line_size]"r"((mips_reg)line_size),
           [ff_pb_80]"f"(ff_pb_80)
         : "memory"
     );
@@ -164,43 +150,42 @@ void ff_put_signed_pixels_clamped_mmi(const int16_t *block,
 void ff_add_pixels_clamped_mmi(const int16_t *block,
         uint8_t *av_restrict pixels, ptrdiff_t line_size)
 {
-    double ftmp[8];
+    double ftmp[9];
     uint64_t tmp[1];
-
     __asm__ volatile (
-        "li         %[tmp0],    0x04                                    \n\t"
-        "xor        %[ftmp0],   %[ftmp0],       %[ftmp0]                \n\t"
-        "1:                                                             \n\t"
-        "ldc1       %[ftmp1],   0x00(%[block])                          \n\t"
-        "ldc1       %[ftmp2],   0x08(%[block])                          \n\t"
-        "ldc1       %[ftmp3],   0x10(%[block])                          \n\t"
-        "ldc1       %[ftmp4],   0x18(%[block])                          \n\t"
-        "ldc1       %[ftmp5],   0x00(%[pixels])                         \n\t"
-        "gsldxc1    %[ftmp6],   0x00(%[pixels], %[line_size])           \n\t"
-        "mov.d      %[ftmp7],   %[ftmp5]                                \n\t"
-        "punpcklbh  %[ftmp5],   %[ftmp5],       %[ftmp0]                \n\t"
-        "punpckhbh  %[ftmp7],   %[ftmp7],       %[ftmp0]                \n\t"
-        "paddh      %[ftmp1],   %[ftmp1],       %[ftmp5]                \n\t"
-        "paddh      %[ftmp2],   %[ftmp2],       %[ftmp7]                \n\t"
-        "mov.d      %[ftmp7],   %[ftmp6]                                \n\t"
-        "punpcklbh  %[ftmp6],   %[ftmp6],       %[ftmp0]                \n\t"
-        "punpckhbh  %[ftmp7],   %[ftmp7],       %[ftmp0]                \n\t"
-        "paddh      %[ftmp3],   %[ftmp3],       %[ftmp6]                \n\t"
-        "paddh      %[ftmp4],   %[ftmp4],       %[ftmp7]                \n\t"
-        "packushb   %[ftmp1],   %[ftmp1],       %[ftmp2]                \n\t"
-        "packushb   %[ftmp3],   %[ftmp3],       %[ftmp4]                \n\t"
-        "sdc1       %[ftmp1],   0x00(%[pixels])                         \n\t"
-        "gssdxc1    %[ftmp3],   0x00(%[pixels], %[line_size])           \n\t"
-        "addi       %[tmp0],    %[tmp0],        -0x01                   \n\t"
-        PTR_ADDIU  "%[block],   %[block],       0x20                    \n\t"
-        PTR_ADDU   "%[pixels],  %[pixels],      %[line_size]            \n\t"
-        PTR_ADDU   "%[pixels],  %[pixels],      %[line_size]            \n\t"
-        "bnez       %[tmp0],    1b"
+        "li         %[tmp0],    0x04                           \n\t"
+        "xor        %[ftmp0],   %[ftmp0],   %[ftmp0]           \n\t"
+        "1:                                                    \n\t"
+        MMI_LDC1(%[ftmp5], %[pixels], 0x00)
+        PTR_ADDU   "%[pixels],  %[pixels],  %[line_size]       \n\t"
+        MMI_LDC1(%[ftmp6], %[pixels], 0x00)
+        PTR_SUBU   "%[pixels],  %[pixels],  %[line_size]       \n\t"
+        MMI_LDC1(%[ftmp1], %[block], 0x00)
+        MMI_LDC1(%[ftmp2], %[block], 0x08)
+        MMI_LDC1(%[ftmp3], %[block], 0x10)
+        MMI_LDC1(%[ftmp4], %[block], 0x18)
+        PTR_ADDIU  "%[block],   %[block],   0x20               \n\t"
+        "punpckhbh  %[ftmp7],   %[ftmp5],   %[ftmp0]           \n\t"
+        "punpcklbh  %[ftmp5],   %[ftmp5],   %[ftmp0]           \n\t"
+        "punpckhbh  %[ftmp8],   %[ftmp6],   %[ftmp0]           \n\t"
+        "punpcklbh  %[ftmp6],   %[ftmp6],   %[ftmp0]           \n\t"
+        "paddh      %[ftmp1],   %[ftmp1],   %[ftmp5]           \n\t"
+        "paddh      %[ftmp2],   %[ftmp2],   %[ftmp7]           \n\t"
+        "paddh      %[ftmp3],   %[ftmp3],   %[ftmp6]           \n\t"
+        "paddh      %[ftmp4],   %[ftmp4],   %[ftmp8]           \n\t"
+        "packushb   %[ftmp1],   %[ftmp1],   %[ftmp2]           \n\t"
+        "packushb   %[ftmp3],   %[ftmp3],   %[ftmp4]           \n\t"
+        MMI_SDC1(%[ftmp1], %[pixels], 0x00)
+        PTR_ADDU   "%[pixels],  %[pixels],  %[line_size]       \n\t"
+        MMI_SDC1(%[ftmp3], %[pixels], 0x00)
+        "addi       %[tmp0],    %[tmp0],    -0x01              \n\t"
+        PTR_ADDU   "%[pixels],  %[pixels],  %[line_size]       \n\t"
+        "bnez       %[tmp0],    1b                             \n\t"
         : [ftmp0]"=&f"(ftmp[0]),            [ftmp1]"=&f"(ftmp[1]),
           [ftmp2]"=&f"(ftmp[2]),            [ftmp3]"=&f"(ftmp[3]),
           [ftmp4]"=&f"(ftmp[4]),            [ftmp5]"=&f"(ftmp[5]),
           [ftmp6]"=&f"(ftmp[6]),            [ftmp7]"=&f"(ftmp[7]),
-          [tmp0]"=&r"(tmp[0]),
+          [ftmp8]"=&f"(ftmp[8]),            [tmp0]"=&r"(tmp[0]),
           [pixels]"+&r"(pixels),            [block]"+&r"(block)
         : [line_size]"r"((mips_reg)line_size)
         : "memory"

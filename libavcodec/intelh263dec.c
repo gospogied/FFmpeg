@@ -33,7 +33,7 @@ int ff_intel_h263_decode_picture_header(MpegEncContext *s)
     }
 
     /* picture header */
-    if (get_bits_long(&s->gb, 22) != 0x20) {
+    if (get_bits(&s->gb, 22) != 0x20) {
         av_log(s->avctx, AV_LOG_ERROR, "Bad picture start code\n");
         return -1;
     }
@@ -138,6 +138,7 @@ AVCodec ff_h263i_decoder = {
     .close          = ff_h263_decode_end,
     .decode         = ff_h263_decode_frame,
     .capabilities   = AV_CODEC_CAP_DRAW_HORIZ_BAND | AV_CODEC_CAP_DR1,
+    .caps_internal  = FF_CODEC_CAP_SKIP_FRAME_FILL_PARAM,
     .pix_fmts       = (const enum AVPixelFormat[]) {
         AV_PIX_FMT_YUV420P,
         AV_PIX_FMT_NONE

@@ -25,21 +25,21 @@
 #include "libavcodec/h264dec.h"
 #include "constants.h"
 
-void ff_h264_h_lpf_luma_inter_msa(uint8_t *src, int stride,
+void ff_h264_h_lpf_luma_inter_msa(uint8_t *src, ptrdiff_t stride,
                                   int alpha, int beta, int8_t *tc0);
-void ff_h264_v_lpf_luma_inter_msa(uint8_t *src, int stride,
+void ff_h264_v_lpf_luma_inter_msa(uint8_t *src, ptrdiff_t stride,
                                   int alpha, int beta, int8_t *tc0);
-void ff_h264_h_lpf_chroma_inter_msa(uint8_t *src, int stride,
+void ff_h264_h_lpf_chroma_inter_msa(uint8_t *src, ptrdiff_t stride,
                                     int alpha, int beta, int8_t *tc0);
-void ff_h264_v_lpf_chroma_inter_msa(uint8_t *src, int stride,
+void ff_h264_v_lpf_chroma_inter_msa(uint8_t *src, ptrdiff_t stride,
                                     int alpha, int beta, int8_t *tc0);
-void ff_h264_h_loop_filter_chroma422_msa(uint8_t *src, int32_t stride,
+void ff_h264_h_loop_filter_chroma422_msa(uint8_t *src, ptrdiff_t stride,
                                          int32_t alpha, int32_t beta,
                                          int8_t *tc0);
-void ff_h264_h_loop_filter_chroma422_mbaff_msa(uint8_t *src, int32_t stride,
+void ff_h264_h_loop_filter_chroma422_mbaff_msa(uint8_t *src, ptrdiff_t stride,
                                                int32_t alpha, int32_t beta,
                                                int8_t *tc0);
-void ff_h264_h_loop_filter_luma_mbaff_msa(uint8_t *src, int32_t stride,
+void ff_h264_h_loop_filter_luma_mbaff_msa(uint8_t *src, ptrdiff_t stride,
                                           int32_t alpha, int32_t beta,
                                           int8_t *tc0);
 
@@ -67,31 +67,31 @@ void ff_h264_idct8_add4_msa(uint8_t *dst, const int *blk_offset,
                             int16_t *blk, int dst_stride,
                             const uint8_t nnzc[15 * 8]);
 
-void ff_h264_h_lpf_luma_intra_msa(uint8_t *src, int stride,
+void ff_h264_h_lpf_luma_intra_msa(uint8_t *src, ptrdiff_t stride,
                                   int alpha, int beta);
-void ff_h264_v_lpf_luma_intra_msa(uint8_t *src, int stride,
+void ff_h264_v_lpf_luma_intra_msa(uint8_t *src, ptrdiff_t stride,
                                   int alpha, int beta);
-void ff_h264_h_lpf_chroma_intra_msa(uint8_t *src, int stride,
+void ff_h264_h_lpf_chroma_intra_msa(uint8_t *src, ptrdiff_t stride,
                                     int alpha, int beta);
-void ff_h264_v_lpf_chroma_intra_msa(uint8_t *src, int stride,
+void ff_h264_v_lpf_chroma_intra_msa(uint8_t *src, ptrdiff_t stride,
                                     int alpha, int beta);
-void ff_h264_h_loop_filter_luma_mbaff_intra_msa(uint8_t *src, int stride,
+void ff_h264_h_loop_filter_luma_mbaff_intra_msa(uint8_t *src, ptrdiff_t stride,
                                                 int alpha, int beta);
 
 void ff_biweight_h264_pixels16_8_msa(uint8_t *dst, uint8_t *src,
-                                     int stride, int height, int log2_denom,
+                                     ptrdiff_t stride, int height, int log2_denom,
                                      int weightd, int weights, int offset);
 void ff_biweight_h264_pixels8_8_msa(uint8_t *dst, uint8_t *src,
-                                    int stride, int height, int log2_denom,
+                                    ptrdiff_t stride, int height, int log2_denom,
                                     int weightd, int weights, int offset);
 void ff_biweight_h264_pixels4_8_msa(uint8_t *dst, uint8_t *src,
-                                    int stride, int height, int log2_denom,
+                                    ptrdiff_t stride, int height, int log2_denom,
                                     int weightd, int weights, int offset);
-void ff_weight_h264_pixels16_8_msa(uint8_t *src, int stride, int height,
+void ff_weight_h264_pixels16_8_msa(uint8_t *src, ptrdiff_t stride, int height,
                                    int log2_denom, int weight, int offset);
-void ff_weight_h264_pixels8_8_msa(uint8_t *src, int stride, int height,
+void ff_weight_h264_pixels8_8_msa(uint8_t *src, ptrdiff_t stride, int height,
                                   int log2_denom, int weight, int offset);
-void ff_weight_h264_pixels4_8_msa(uint8_t *src, int stride, int height,
+void ff_weight_h264_pixels4_8_msa(uint8_t *src, ptrdiff_t stride, int height,
                                   int log2_denom, int weight, int offset);
 
 void ff_put_h264_qpel16_mc00_msa(uint8_t *dst, const uint8_t *src,
@@ -339,41 +339,41 @@ void ff_h264_luma_dc_dequant_idct_8_mmi(int16_t *output, int16_t *input,
 void ff_h264_chroma_dc_dequant_idct_8_mmi(int16_t *block, int qmul);
 void ff_h264_chroma422_dc_dequant_idct_8_mmi(int16_t *block, int qmul);
 
-void ff_h264_weight_pixels16_8_mmi(uint8_t *block, int stride, int height,
+void ff_h264_weight_pixels16_8_mmi(uint8_t *block, ptrdiff_t stride, int height,
         int log2_denom, int weight, int offset);
 void ff_h264_biweight_pixels16_8_mmi(uint8_t *dst, uint8_t *src,
-        int stride, int height, int log2_denom, int weightd, int weights,
+        ptrdiff_t stride, int height, int log2_denom, int weightd, int weights,
         int offset);
-void ff_h264_weight_pixels8_8_mmi(uint8_t *block, int stride, int height,
+void ff_h264_weight_pixels8_8_mmi(uint8_t *block, ptrdiff_t stride, int height,
         int log2_denom, int weight, int offset);
 void ff_h264_biweight_pixels8_8_mmi(uint8_t *dst, uint8_t *src,
-        int stride, int height, int log2_denom, int weightd, int weights,
+        ptrdiff_t stride, int height, int log2_denom, int weightd, int weights,
         int offset);
-void ff_h264_weight_pixels4_8_mmi(uint8_t *block, int stride, int height,
+void ff_h264_weight_pixels4_8_mmi(uint8_t *block, ptrdiff_t stride, int height,
         int log2_denom, int weight, int offset);
 void ff_h264_biweight_pixels4_8_mmi(uint8_t *dst, uint8_t *src,
-        int stride, int height, int log2_denom, int weightd, int weights,
+        ptrdiff_t stride, int height, int log2_denom, int weightd, int weights,
         int offset);
 
-void ff_deblock_v_chroma_8_mmi(uint8_t *pix, int stride, int alpha, int beta,
+void ff_deblock_v_chroma_8_mmi(uint8_t *pix, ptrdiff_t stride, int alpha, int beta,
         int8_t *tc0);
-void ff_deblock_v_chroma_intra_8_mmi(uint8_t *pix, int stride, int alpha,
+void ff_deblock_v_chroma_intra_8_mmi(uint8_t *pix, ptrdiff_t stride, int alpha,
         int beta);
-void ff_deblock_h_chroma_8_mmi(uint8_t *pix, int stride, int alpha, int beta,
+void ff_deblock_h_chroma_8_mmi(uint8_t *pix, ptrdiff_t stride, int alpha, int beta,
         int8_t *tc0);
-void ff_deblock_h_chroma_intra_8_mmi(uint8_t *pix, int stride, int alpha,
+void ff_deblock_h_chroma_intra_8_mmi(uint8_t *pix, ptrdiff_t stride, int alpha,
         int beta);
-void ff_deblock_v_luma_8_mmi(uint8_t *pix, int stride, int alpha, int beta,
+void ff_deblock_v_luma_8_mmi(uint8_t *pix, ptrdiff_t stride, int alpha, int beta,
         int8_t *tc0);
-void ff_deblock_v_luma_intra_8_mmi(uint8_t *pix, int stride, int alpha,
+void ff_deblock_v_luma_intra_8_mmi(uint8_t *pix, ptrdiff_t stride, int alpha,
         int beta);
-void ff_deblock_h_luma_8_mmi(uint8_t *pix, int stride, int alpha, int beta,
+void ff_deblock_h_luma_8_mmi(uint8_t *pix, ptrdiff_t stride, int alpha, int beta,
         int8_t *tc0);
-void ff_deblock_h_luma_intra_8_mmi(uint8_t *pix, int stride, int alpha,
+void ff_deblock_h_luma_intra_8_mmi(uint8_t *pix, ptrdiff_t stride, int alpha,
         int beta);
-void ff_deblock_v8_luma_8_mmi(uint8_t *pix, int stride, int alpha, int beta,
+void ff_deblock_v8_luma_8_mmi(uint8_t *pix, ptrdiff_t stride, int alpha, int beta,
         int8_t *tc0);
-void ff_deblock_v8_luma_intra_8_mmi(uint8_t *pix, int stride, int alpha,
+void ff_deblock_v8_luma_intra_8_mmi(uint8_t *pix, ptrdiff_t stride, int alpha,
         int beta);
 
 void ff_put_h264_qpel16_mc00_mmi(uint8_t *dst, const uint8_t *src,

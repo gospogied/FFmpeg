@@ -262,7 +262,7 @@ static void decode_pitch_lag_high(int *lag_int, int *lag_frac, int pitch_index,
             *lag_frac = pitch_index - (*lag_int << 2) + 136;
         } else if (pitch_index < 440) {
             *lag_int  = (pitch_index + 257 - 376) >> 1;
-            *lag_frac = (pitch_index - (*lag_int << 1) + 256 - 376) << 1;
+            *lag_frac = (pitch_index - (*lag_int << 1) + 256 - 376) * 2;
             /* the actual resolution is 1/2 but expressed as 1/4 */
         } else {
             *lag_int  = pitch_index - 280;
@@ -292,7 +292,7 @@ static void decode_pitch_lag_low(int *lag_int, int *lag_frac, int pitch_index,
     if (subframe == 0 || (subframe == 2 && mode != MODE_6k60)) {
         if (pitch_index < 116) {
             *lag_int  = (pitch_index + 69) >> 1;
-            *lag_frac = (pitch_index - (*lag_int << 1) + 68) << 1;
+            *lag_frac = (pitch_index - (*lag_int << 1) + 68) * 2;
         } else {
             *lag_int  = pitch_index - 24;
             *lag_frac = 0;
@@ -302,7 +302,7 @@ static void decode_pitch_lag_low(int *lag_int, int *lag_frac, int pitch_index,
                                 AMRWB_P_DELAY_MIN, AMRWB_P_DELAY_MAX - 15);
     } else {
         *lag_int  = (pitch_index + 1) >> 1;
-        *lag_frac = (pitch_index - (*lag_int << 1)) << 1;
+        *lag_frac = (pitch_index - (*lag_int << 1)) * 2;
         *lag_int += *base_lag_int;
     }
 }
@@ -611,7 +611,7 @@ static float voice_factor(float *p_vector, float p_gain,
                                                           AMRWB_SFR_SIZE) *
                     f_gain * f_gain;
 
-    return (p_ener - f_ener) / (p_ener + f_ener);
+    return (p_ener - f_ener) / (p_ener + f_ener + 0.01);
 }
 
 /**
@@ -862,15 +862,20 @@ static float find_hb_gain(AMRWBContext *ctx, const float *synth,
 {
     int wsp = (vad > 0);
     float tilt;
+    float tmp;
 
     if (ctx->fr_cur_mode == MODE_23k85)
         return qua_hb_gain[hb_idx] * (1.0f / (1 << 14));
 
-    tilt = ctx->celpm_ctx.dot_productf(synth, synth + 1, AMRWB_SFR_SIZE - 1) /
-           ctx->celpm_ctx.dot_productf(synth, synth, AMRWB_SFR_SIZE);
+    tmp = ctx->celpm_ctx.dot_productf(synth, synth + 1, AMRWB_SFR_SIZE - 1);
+
+    if (tmp > 0) {
+        tilt = tmp / ctx->celpm_ctx.dot_productf(synth, synth, AMRWB_SFR_SIZE);
+    } else
+        tilt = 0;
 
     /* return gain bounded by [0.1, 1.0] */
-    return av_clipf((1.0 - FFMAX(0.0, tilt)) * (1.25 - 0.25 * wsp), 0.1, 1.0);
+    return av_clipf((1.0 - tilt) * (1.25 - 0.25 * wsp), 0.1, 1.0);
 }
 
 /**
@@ -1114,12 +1119,23 @@ static int amrwb_decode_frame(AVCodecContext *avctx, void *data,
     buf_out = (float *)frame->data[0];
 
     header_size      = decode_mime_header(ctx, buf);
+    expected_fr_size = ((cf_sizes_wb[ctx->fr_cur_mode] + 7) >> 3) + 1;
+
+    if (!ctx->fr_quality)
+        av_log(avctx, AV_LOG_ERROR, "Encountered a bad or corrupted frame\n");
+
+    if (ctx->fr_cur_mode == NO_DATA || !ctx->fr_quality) {
+        /* The specification suggests a "random signal" and
+           "a muting technique" to "gradually decrease the output level". */
+        av_samples_set_silence(&frame->data[0], 0, frame->nb_samples, 1, AV_SAMPLE_FMT_FLT);
+        *got_frame_ptr = 1;
+        return expected_fr_size;
+    }
     if (ctx->fr_cur_mode > MODE_SID) {
         av_log(avctx, AV_LOG_ERROR,
                "Invalid mode %d\n", ctx->fr_cur_mode);
         return AVERROR_INVALIDDATA;
     }
-    expected_fr_size = ((cf_sizes_wb[ctx->fr_cur_mode] + 7) >> 3) + 1;
 
     if (buf_size < expected_fr_size) {
         av_log(avctx, AV_LOG_ERROR,
@@ -1127,9 +1143,6 @@ static int amrwb_decode_frame(AVCodecContext *avctx, void *data,
         *got_frame_ptr = 0;
         return AVERROR_INVALIDDATA;
     }
-
-    if (!ctx->fr_quality || ctx->fr_cur_mode > MODE_SID)
-        av_log(avctx, AV_LOG_ERROR, "Encountered a bad or corrupted frame\n");
 
     if (ctx->fr_cur_mode == MODE_SID) { /* Comfort noise frame */
         avpriv_request_sample(avctx, "SID mode");

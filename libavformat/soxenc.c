@@ -80,8 +80,6 @@ static int sox_write_header(AVFormatContext *s)
 
     ffio_fill(pb, 0, comment_size - comment_len);
 
-    avio_flush(pb);
-
     return 0;
 }
 
@@ -91,7 +89,7 @@ static int sox_write_trailer(AVFormatContext *s)
     AVIOContext *pb = s->pb;
     AVCodecParameters *par = s->streams[0]->codecpar;
 
-    if (s->pb->seekable) {
+    if (s->pb->seekable & AVIO_SEEKABLE_NORMAL) {
         /* update number of samples */
         int64_t file_size = avio_tell(pb);
         int64_t num_samples = (file_size - sox->header_size - 4LL) >> 2LL;
@@ -101,8 +99,6 @@ static int sox_write_trailer(AVFormatContext *s)
         } else
             avio_wb64(pb, num_samples);
         avio_seek(pb, file_size, SEEK_SET);
-
-        avio_flush(pb);
     }
 
     return 0;

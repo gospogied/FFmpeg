@@ -71,6 +71,8 @@ int ff_put_wav_header(AVFormatContext *s, AVIOContext *pb,
     frame_size = av_get_audio_frame_duration2(par, par->block_align);
 
     waveformatextensible = (par->channels > 2 && par->channel_layout) ||
+                           par->channels == 1 && par->channel_layout && par->channel_layout != AV_CH_LAYOUT_MONO ||
+                           par->channels == 2 && par->channel_layout && par->channel_layout != AV_CH_LAYOUT_STEREO ||
                            par->sample_rate > 48000 ||
                            par->codec_id == AV_CODEC_ID_EAC3 ||
                            av_get_bits_per_sample(par->codec_id) > 16;
@@ -205,11 +207,12 @@ int ff_put_wav_header(AVFormatContext *s, AVIOContext *pb,
 
 /* BITMAPINFOHEADER header */
 void ff_put_bmp_header(AVIOContext *pb, AVCodecParameters *par,
-                       const AVCodecTag *tags, int for_asf, int ignore_extradata)
+                       int for_asf, int ignore_extradata, int rgb_frame_is_flipped)
 {
-    int keep_height = par->extradata_size >= 9 &&
-                      !memcmp(par->extradata + par->extradata_size - 9, "BottomUp", 9);
-    int extradata_size = par->extradata_size - 9*keep_height;
+    int flipped_extradata = (par->extradata_size >= 9 &&
+                            !memcmp(par->extradata + par->extradata_size - 9, "BottomUp", 9));
+    int keep_height = flipped_extradata || rgb_frame_is_flipped;
+    int extradata_size = par->extradata_size - 9*flipped_extradata;
     enum AVPixelFormat pix_fmt = par->format;
     int pal_avi;
 
@@ -304,7 +307,8 @@ void ff_riff_write_info_tag(AVIOContext *pb, const char *tag, const char *str)
 }
 
 static const char riff_tags[][5] = {
-    "IARL", "IART", "ICMS", "ICMT", "ICOP", "ICRD", "ICRP", "IDIM", "IDPI",
+    "IARL", "IART", "IAS1", "IAS2", "IAS3", "IAS4", "IAS5", "IAS6", "IAS7",
+    "IAS8", "IAS9", "ICMS", "ICMT", "ICOP", "ICRD", "ICRP", "IDIM", "IDPI",
     "IENG", "IGNR", "IKEY", "ILGT", "ILNG", "IMED", "INAM", "IPLT", "IPRD",
     "IPRT", "ITRK", "ISBJ", "ISFT", "ISHP", "ISMP", "ISRC", "ISRF", "ITCH",
     { 0 }
