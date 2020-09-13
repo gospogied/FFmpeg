@@ -29,7 +29,6 @@
 #include "internal.h"
 #include "amltools.h"
 
-#include "libavutil/atomic.h"
 #include "libavutil/avassert.h"
 #include "libavutil/buffer.h"
 #include "libavutil/common.h"

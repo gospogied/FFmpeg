@@ -61,7 +61,6 @@ vformat_t aml_get_vformat(AVCodecContext *avctx)
   {
     case AV_CODEC_ID_MPEG1VIDEO:
     case AV_CODEC_ID_MPEG2VIDEO:
-    case AV_CODEC_ID_MPEG2VIDEO_XVMC:
       format = VFORMAT_MPEG12;
       break;
     case AV_CODEC_ID_H263:
