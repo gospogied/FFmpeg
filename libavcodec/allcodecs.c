@@ -149,7 +149,7 @@ extern AVCodec ff_h264_rkmpp_decoder;
 extern AVCodec ff_hap_encoder;
 extern AVCodec ff_hap_decoder;
 extern AVCodec ff_hevc_decoder;
-extern AVCodec ff_hevc_am_decoderl;
+extern AVCodec ff_hevc_aml_decoder;
 extern AVCodec ff_hevc_qsv_decoder;
 extern AVCodec ff_hevc_rkmpp_decoder;
 extern AVCodec ff_hevc_v4l2m2m_decoder;
